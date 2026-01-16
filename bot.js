@@ -2,9 +2,9 @@ const mineflayer = require('mineflayer')
 
 function startBot () {
   const bot = mineflayer.createBot({
-    host: 'IP_DU_SERVEUR',
-    port: 25565,
-    username: 'BotAFK',
+    host: 'TheOnly.exaroton.me',
+    port: 52424,
+    username: 'PierrePaul',
     version: '1.20.1'
   })
 
