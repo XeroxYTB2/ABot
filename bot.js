@@ -10,10 +10,10 @@ const express = require('express');
 // ═══════════════════════════════════════════════════════════
 
 const BOT_CONFIG = {
-  host: process.env.MC_HOST || 'play.xeroxytb.com',
-  port: parseInt(process.env.MC_PORT) || 26754,
+  host: process.env.MC_HOST || 'join.xeroxytb.com',
+  port: parseInt(process.env.MC_PORT) || 33921,
   username: process.env.MC_USERNAME || 'BotAFK',
-  version: process.env.MC_VERSION || '1.20.1',
+  version: process.env.MC_VERSION || '1.21.1',
   auth: process.env.MC_AUTH || 'offline',
   // Essayer de se connecter en mode "client vanilla" même sur Forge
   hideErrors: false
