@@ -1,0 +1,11 @@
+{
+  "build": {
+    "builder": "DOCKER",
+    "image": "itzg/minecraft-server:java17"
+  },
+  "deploy": {
+    "numReplicas": 1,
+    "restartPolicyType": "ALWAYS",
+    "restartPolicyMaxRetries": 10
+  }
+}
