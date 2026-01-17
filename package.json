@@ -1,16 +1,11 @@
 {
-  "name": "minecraft-forge-bot",
+  "name": "mc-afk-bot",
   "version": "1.0.0",
-  "description": "Bot Minecraft pour serveur Forge",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js"
   },
   "dependencies": {
-    "mineflayer": "^4.20.1",
-    "express": "^4.18.2"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "mineflayer": "4.17.0"
   }
 }
