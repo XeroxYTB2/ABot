@@ -1,0 +1,17 @@
+{
+  "name": "minecraft-forge-bot",
+  "version": "2.0.0",
+  "description": "Bot pour serveur Minecraft Forge 1.20.1 moddé",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "mineflayer": "^4.15.1",
+    "mineflayer-pathfinder": "^2.4.5",
+    "minecraft-data": "^3.61.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
