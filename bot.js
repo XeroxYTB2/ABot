@@ -5,7 +5,7 @@ function startBot () {
     host: 'TheOnly.exaroton.me',
     port: 52424,
     username: 'PierrePaul',
-    version: '1.20.1'
+    version: '1.21.1'
   })
 
   bot.once('spawn', () => {
