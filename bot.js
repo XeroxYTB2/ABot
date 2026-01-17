@@ -1,41 +1,33 @@
 const mineflayer = require('mineflayer')
 const http = require('http')
 
-// Keep-alive Railway
+// Keep-alive pour Railway
 http.createServer((req, res) => {
   res.end('Bot Minecraft actif')
 }).listen(3000, () => {
-  console.log('🌐 Serveur web actif')
+  console.log('🌐 Serveur web actif sur le port 3000')
 })
 
-function startBot () {
+function startBot() {
   console.log('🚀 Lancement du bot...')
 
   const bot = mineflayer.createBot({
-    host: 'TheOnly.exaroton.me',
-    username: 'BotAFK',
+    host: 'TheOnly.exaroton.me', // exemple: TheOnly.exaroton.me
+    port: 52424,           // laisse 25565 si standard
+    username: 'BotAFK',    // pseudo du bot
     version: '1.21.1',
-    auth: 'offline' // OBLIGATOIRE pour crack / exaroton
+    auth: 'offline'        // obligatoire pour les serveurs crack
   })
 
-  bot.on('login', () => {
-    console.log('🔑 Login OK')
-  })
-
+  bot.on('login', () => console.log('🔑 Login OK'))
+  
   bot.once('spawn', () => {
     console.log('✅ Bot connecté et spawn')
-    setInterval(() => {
-      bot.swingArm('right')
-    }, 10000)
+    setInterval(() => bot.swingArm('right'), 10000) // tape toutes les 10 sec
   })
 
-  bot.on('kicked', r => {
-    console.log('❌ Kick:', r)
-  })
-
-  bot.on('error', e => {
-    console.log('⚠️ Erreur:', e)
-  })
+  bot.on('kicked', r => console.log('❌ Kick:', r))
+  bot.on('error', e => console.log('⚠️ Erreur:', e))
 
   bot.on('end', () => {
     console.log('🔄 Reconnexion dans 15s...')
@@ -43,4 +35,5 @@ function startBot () {
   })
 }
 
+// Lancement initial
 startBot()
