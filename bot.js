@@ -1,169 +1,233 @@
-// bot.js
 const mineflayer = require('mineflayer');
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const minecraftData = require('minecraft-data');
+const express = require('express');
 
-// Configuration
+// Configuration via variables d'environnement Railway
 const config = {
-    host: 'localhost', // Adresse du serveur
-    port: 25565, // Port du serveur
-    username: 'Bot', // Nom du bot
-    version: '1.20.1', // Version de Minecraft
-    auth: 'offline' // 'offline' ou 'microsoft'
+    host: process.env.MC_HOST || 'localhost',
+    port: parseInt(process.env.MC_PORT) || 25565,
+    username: process.env.MC_USERNAME || 'RailwayBot',
+    version: process.env.MC_VERSION || '1.20.1',
+    auth: process.env.MC_AUTH || 'offline',
+    
+    // Configuration Forge (pour serveurs moddés)
+    forgeOptions: {
+        forgeMods: [
+            {
+                name: 'minecraft',
+                version: '1.20.1'
+            }
+            // Ajoute d'autres mods ici si nécessaire
+            // Ces mods doivent correspondre à ceux du serveur
+        ]
+    }
 };
 
-// Options spécifiques Forge
-const forgeOptions = {
-    forgeMods: [
-        {
-            // Liste des mods côté client que le bot prétend avoir
-            // Important: Doit correspondre aux mods du serveur
-            name: 'minecraft',
-            version: '1.20.1'
-        }
-        // Ajouter d'autres mods si nécessaire
-    ]
-};
+// Configuration Railway
+const WEB_PORT = process.env.PORT || 3000;
+
+// Serveur web minimal pour Railway health checks
+const app = express();
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        bot: bot ? 'connected' : 'disconnected',
+        uptime: process.uptime()
+    });
+});
+
+app.get('/', (req, res) => {
+    res.send('🤖 Minecraft Forge Bot is running on Railway');
+});
+
+app.listen(WEB_PORT, () => {
+    console.log(`🌐 Serveur web Railway actif sur le port ${WEB_PORT}`);
+});
 
 let bot;
-let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 10;
+let isConnected = false;
 
 function createBot() {
-    console.log('🚀 Création du bot...');
+    console.log('🚀 Tentative de connexion au serveur Minecraft...');
+    console.log(`📡 Serveur: ${config.host}:${config.port}`);
+    console.log(`👤 Bot: ${config.username}`);
     
     bot = mineflayer.createBot({
-        ...config,
-        ...forgeOptions
+        host: config.host,
+        port: config.port,
+        username: config.username,
+        version: config.version,
+        auth: config.auth,
+        
+        // Configuration Forge
+        forgeOptions: config.forgeOptions,
+        
+        // Options réseau pour Railway
+        connectTimeout: 30 * 1000, // 30 secondes
+        keepAlive: true,
+        checkTimeoutInterval: 30 * 1000
     });
 
-    // Charger le pathfinder
+    // Charger les plugins
     bot.loadPlugin(pathfinder);
 
-    // Événement de connexion réussie
+    // ======================
+    // GESTION DES ÉVÉNEMENTS
+    // ======================
+
     bot.on('login', () => {
-        console.log('✅ Connecté au serveur');
-        reconnectAttempts = 0;
-        
-        // Afficher les informations du serveur
-        console.log(`🌍 Serveur: ${bot.game.serverBrand || 'Forge 1.20.1'}`);
-        console.log(`👤 Nom: ${bot.player.username}`);
-        console.log(`📍 Position: ${bot.entity.position}`);
+        console.log('✅ Authentifié sur le serveur');
+        console.log(`🎮 Version: ${bot.version}`);
     });
 
-    // Événement de spawn
     bot.on('spawn', () => {
-        console.log('🎮 Bot spawné dans le monde');
+        isConnected = true;
+        console.log('📍 Bot spawné dans le monde');
+        console.log(`🌍 Dimension: ${bot.game.dimension}`);
         
-        // Activer les mouvements
+        // Initialiser les mouvements
         const mcData = minecraftData(bot.version);
         const movements = new Movements(bot, mcData);
         bot.pathfinder.setMovements(movements);
+        
+        // Dire bonjour dans le chat
+        setTimeout(() => {
+            bot.chat('Bonjour ! Je suis un bot Railway 🤖');
+        }, 3000);
     });
 
-    // Gestion du chat
-    bot.on('message', (message) => {
-        const text = message.toString().trim();
-        console.log(`💬 Chat: ${text}`);
+    bot.on('message', (jsonMsg) => {
+        const message = jsonMsg.toString();
+        console.log(`💬 ${message}`);
         
-        // Répondre aux commandes
-        if (text.includes('!ping')) {
-            bot.chat('🏓 Pong!');
+        // Commandes
+        if (message.includes('!help')) {
+            bot.chat('Commandes: !pos, !ping, !follow [joueur], !stop');
         }
         
-        if (text.includes('!pos')) {
+        if (message.includes('!ping')) {
+            bot.chat('🏓 Pong! (from Railway)');
+        }
+        
+        if (message.includes('!pos')) {
             const pos = bot.entity.position;
-            bot.chat(`📍 Position: ${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}`);
-        }
-        
-        if (text.includes('!follow')) {
-            const playerName = text.split(' ')[1];
-            followPlayer(playerName);
-        }
-        
-        if (text.includes('!stop')) {
-            bot.pathfinder.setGoal(null);
-            bot.chat('🛑 Arrêt du mouvement');
+            bot.chat(`📍 X: ${Math.floor(pos.x)} Y: ${Math.floor(pos.y)} Z: ${Math.floor(pos.z)}`);
         }
     });
 
-    // Gestion des erreurs
-    bot.on('error', (err) => {
-        console.error('❌ Erreur:', err.message);
+    bot.on('whisper', (username, message) => {
+        console.log(`📩 Message privé de ${username}: ${message}`);
+    });
+
+    bot.on('playerJoined', (player) => {
+        console.log(`👋 ${player.username} a rejoint`);
+    });
+
+    bot.on('playerLeft', (player) => {
+        console.log(`👋 ${player.username} a quitté`);
     });
 
     bot.on('kicked', (reason) => {
-        console.log('👢 Kick du serveur:', reason);
-        attemptReconnect();
+        console.log(`👢 Kick: ${reason}`);
+        isConnected = false;
+        handleDisconnection();
     });
 
-    bot.on('end', () => {
-        console.log('🔌 Déconnecté du serveur');
-        attemptReconnect();
+    bot.on('error', (err) => {
+        console.error(`❌ Erreur: ${err.message}`);
+        isConnected = false;
+        handleDisconnection();
     });
 
-    // Événements de santé et nourriture
-    bot.on('health', () => {
-        if (bot.health <= 10) {
-            console.log(`⚠️ Santé faible: ${bot.health}/20`);
-        }
+    bot.on('end', (reason) => {
+        console.log(`🔌 Déconnecté: ${reason || 'No reason provided'}`);
+        isConnected = false;
+        handleDisconnection();
     });
 
-    bot.on('death', () => {
-        console.log('💀 Le bot est mort');
-    });
-
-    // Anti-AFK: bouger légèrement toutes les minutes
+    // ======================
+    // SYSTÈME ANTI-AFK
+    // ======================
+    
     setInterval(() => {
-        if (bot.entity && !bot.pathfinder.isMoving()) {
-            bot.setControlState('forward', true);
+        if (bot && isConnected) {
+            // Mouvements aléatoires anti-AFK
+            const actions = ['forward', 'back', 'left', 'right', 'jump'];
+            const action = actions[Math.floor(Math.random() * actions.length)];
+            
+            bot.setControlState(action, true);
             setTimeout(() => {
-                bot.setControlState('forward', false);
-            }, 1000);
+                if (bot) bot.setControlState(action, false);
+            }, 500);
+            
+            console.log(`🤖 Anti-AFK: ${action}`);
         }
-    }, 60000);
+    }, 60000); // Toutes les minutes
 }
 
-// Fonction pour suivre un joueur
-function followPlayer(playerName) {
-    const player = bot.players[playerName];
+// ======================
+// GESTION RECONNEXION
+// ======================
+
+let reconnectAttempts = 0;
+const MAX_RECONNECTS = 20;
+
+function handleDisconnection() {
+    reconnectAttempts++;
     
-    if (!player || !player.entity) {
-        bot.chat(`❌ Joueur ${playerName} non trouvé`);
+    if (reconnectAttempts > MAX_RECONNECTS) {
+        console.log('❌ Nombre maximum de reconnexions atteint');
+        console.log('🔄 Redémarrage complet dans 30 secondes...');
+        setTimeout(() => {
+            process.exit(1); // Railway redémarrera le conteneur
+        }, 30000);
         return;
     }
     
-    bot.chat(`👥 Je te suis, ${playerName}!`);
+    const delay = Math.min(reconnectAttempts * 5000, 30000); // Max 30 secondes
     
-    const goal = new goals.GoalFollow(player.entity, 2);
-    bot.pathfinder.setGoal(goal, true);
+    console.log(`🔄 Reconnexion dans ${delay/1000}s (tentative ${reconnectAttempts}/${MAX_RECONNECTS})`);
+    
+    setTimeout(() => {
+        if (bot) {
+            try {
+                bot.end();
+            } catch (e) {}
+        }
+        createBot();
+    }, delay);
 }
 
-// Tentative de reconnexion
-function attemptReconnect() {
-    if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-        reconnectAttempts++;
-        const delay = Math.min(30000, reconnectAttempts * 5000); // Max 30 secondes
-        
-        console.log(`🔄 Reconnexion dans ${delay/1000}s... (tentative ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
-        
-        setTimeout(() => {
-            createBot();
-        }, delay);
-    } else {
-        console.log('❌ Nombre maximum de tentatives de reconnexion atteint');
-        process.exit(1);
-    }
+// ======================
+// DÉMARRAGE
+// ======================
+
+// Vérifier les variables d'environnement critiques
+if (!process.env.MC_HOST) {
+    console.warn('⚠️ Avertissement: MC_HOST non défini, utilisation de la valeur par défaut');
 }
 
-// Gestion de l'arrêt propre
-process.on('SIGINT', () => {
-    console.log('\n👋 Arrêt du bot...');
-    if (bot) {
-        bot.quit();
-    }
-    process.exit(0);
-});
+console.log('🤖 Démarrage du bot Minecraft Forge sur Railway');
+console.log('📋 Configuration:');
+console.log(`   Host: ${config.host}`);
+console.log(`   Port: ${config.port}`);
+console.log(`   Username: ${config.username}`);
+console.log(`   Version: ${config.version}`);
+console.log('========================================');
 
 // Démarrer le bot
 createBot();
+
+// Gestion des arrêts propres
+process.on('SIGTERM', () => {
+    console.log('🛑 Signal SIGTERM reçu, arrêt propre...');
+    if (bot) bot.quit('Arrêt Railway');
+    process.exit(0);
+});
+
+process.on('SIGINT', () => {
+    console.log('🛑 Signal SIGINT reçu, arrêt propre...');
+    if (bot) bot.quit('Arrêt manuel');
+    process.exit(0);
+});
