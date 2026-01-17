@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  minecraft:
+    image: itzg/minecraft-server:java17
+    ports:
+      - "25565:25565"
+    environment:
+      EULA: "TRUE"
+      TYPE: "FORGE"
+      VERSION: "1.20.1"
+      FORGE_VERSION: "47.2.0"  # À vérifier selon la version de Forge pour 1.20.1
+      MEMORY: "2G"
+    volumes:
+      # Monte un volume pour les données persistantes (monde, mods, config, etc.)
+      - data:/data
+
+volumes:
+  data:
