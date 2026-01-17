@@ -12,8 +12,8 @@ function startBot() {
   console.log('🚀 Lancement du bot...')
 
   const bot = mineflayer.createBot({
-    host: 'TheOnly.aternos.me', // ton serveur
-    port: 26754,                 // port spécifique
+    host: 'Xerox200IQYTB.aternos.me', // ton serveur
+    port: 33921,                 // port spécifique
     username: 'BotAFK',           // pseudo du bot
     version: '1.20.1',            // correspond à ton serveur
     auth: 'offline'               // obligatoire pour crack
