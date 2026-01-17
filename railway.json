@@ -1,11 +1,16 @@
 {
   "build": {
-    "builder": "DOCKER",
-    "image": "itzg/minecraft-server:java17"
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
   },
   "deploy": {
     "numReplicas": 1,
-    "restartPolicyType": "ALWAYS",
-    "restartPolicyMaxRetries": 10
-  }
+    "restartPolicyType": "ALWAYS"
+  },
+  "mounts": [
+    {
+      "mountPoint": "/forge/world",
+      "name": "world"
+    }
+  ]
 }
