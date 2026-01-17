@@ -12,11 +12,11 @@ function startBot() {
   console.log('🚀 Lancement du bot...')
 
   const bot = mineflayer.createBot({
-    host: 'TheOnly.exaroton.me', // exemple: TheOnly.exaroton.me
-    port: 52424,           // laisse 25565 si standard
-    username: 'BotAFK',    // pseudo du bot
-    version: '1.21.1',
-    auth: 'offline'        // obligatoire pour les serveurs crack
+    host: 'TheOnly.exaroton.me', // ton serveur
+    port: 52424,                 // port spécifique
+    username: 'BotAFK',           // pseudo du bot
+    version: '1.20.1',            // correspond à ton serveur
+    auth: 'offline'               // obligatoire pour crack
   })
 
   bot.on('login', () => console.log('🔑 Login OK'))
