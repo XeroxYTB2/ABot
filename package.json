@@ -1,11 +1,116 @@
 {
-  "name": "mc-afk-bot",
+  "name": "minecraft-forge-bot",
   "version": "1.0.0",
+  "description": "Bot Minecraft Forge",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js"
   },
   "dependencies": {
-    "mineflayer": "4.17.0"
+    "mineflayer": "^4.20.1",
+    "prismarine-forge": "^1.0.0",
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
+```
+
+3. **Commit & Push** sur GitHub
+
+---
+
+### **☁️ ÉTAPE 2 : Déployer sur Railway**
+
+1. **Va sur [Railway.app](https://railway.app/)**
+   - Connecte-toi (avec GitHub)
+
+2. **Clique sur "New Project"**
+
+3. **Choisis "Deploy from GitHub repo"**
+   - Sélectionne ton repo `minecraft-forge-bot`
+
+4. **Railway va automatiquement :**
+   - Détecter que c'est du Node.js
+   - Installer les dépendances
+   - Lancer `npm start`
+
+---
+
+### **⚙️ ÉTAPE 3 : Configurer les variables**
+
+1. Dans Railway, **clique sur ton projet**
+
+2. **Va dans l'onglet "Variables"**
+
+3. **Ajoute ces variables :**
+```
+MC_HOST = TheOnly.exaroton.me
+MC_PORT = 52424
+MC_USERNAME = XeroxBot
+MC_VERSION = 1.20.1
+MC_AUTH = offline
+PORT = 3000
+```
+
+*(Change les valeurs selon ton serveur)*
+
+4. **Sauvegarde** → Railway redémarre automatiquement
+
+---
+
+### **📊 ÉTAPE 4 : Vérifier que ça tourne**
+
+1. **Va dans l'onglet "Deployments"**
+
+2. **Clique sur le dernier déploiement**
+
+3. **Regarde les logs** → Tu devrais voir :
+```
+═══════════════════════════════════════════
+🤖 MINECRAFT FORGE BOT
+═══════════════════════════════════════════
+📍 Serveur: TheOnly.exaroton.me:52424
+👤 Pseudo: XeroxBot
+🎮 Version: 1.20.1
+✅ Support Forge activé
+✅ CONNECTÉ AU SERVEUR
+🌍 Spawn dans le monde
+```
+
+---
+
+### **🔥 ÉTAPE 5 : Keep-Alive (optionnel)**
+
+Pour que Railway ne coupe pas le bot :
+
+1. Railway génère une URL type : `https://ton-bot.up.railway.app`
+
+2. **Utilise UptimeRobot** (gratuit) :
+   - Va sur [UptimeRobot.com](https://uptimerobot.com/)
+   - Ajoute un monitor HTTP
+   - URL : `https://ton-bot.up.railway.app`
+   - Interval : 5 minutes
+
+→ UptimeRobot ping ton bot toutes les 5 min = Railway le garde actif
+
+---
+
+## 🎯 **RÉSUMÉ RAPIDE :**
+```
+1. GitHub → Crée repo avec bot.js + package.json
+2. Railway → Deploy from GitHub
+3. Variables → MC_HOST, MC_PORT, etc.
+4. Logs → Vérifie connexion
+5. UptimeRobot → Keep alive
+```
+
+---
+
+## ⚠️ **SI ÇA CRASH / KICK :**
+
+Tu verras dans les logs :
+```
+❌ Kick lié aux mods Forge
+Le serveur a détecté que le bot n'a pas les bons mods.
