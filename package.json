@@ -4,14 +4,16 @@
   "description": "Bot pour serveur Minecraft Forge 1.20.1 moddé",
   "main": "bot.js",
   "scripts": {
-    "start": "node bot.js"
+    "start": "node bot.js",
+    "test": "echo \"No tests\" && exit 0"
   },
   "dependencies": {
     "mineflayer": "^4.15.1",
     "mineflayer-pathfinder": "^2.4.5",
-    "minecraft-data": "^3.61.0"
+    "minecraft-data": "^3.61.0",
+    "express": "^4.18.2"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=18.0.0"
   }
 }
