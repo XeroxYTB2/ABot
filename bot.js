@@ -15,7 +15,7 @@ function startBot() {
     host: 'Xerox200IQYTB.aternos.me', // ton serveur
     port: 33921,                 // port spécifique
     username: 'BotAFK',           // pseudo du bot
-    version: '1.21.1',            // correspond à ton serveur
+    version: '1.20.1',            // correspond à ton serveur
     auth: 'offline'               // obligatoire pour crack
   })
 
