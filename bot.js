@@ -10,9 +10,9 @@ const express = require('express');
 // ═══════════════════════════════════════════════════════════
 
 const BOT_CONFIG = {
-  host: process.env.MC_HOST || 'TheOnly.exaroton.me',
-  port: parseInt(process.env.MC_PORT) || 52424,
-  username: process.env.MC_USERNAME || 'XeroxBot',
+  host: process.env.MC_HOST || 'Xerox200IQYTB-6VGP.aternos.me',
+  port: parseInt(process.env.MC_PORT) || 32799,
+  username: process.env.MC_USERNAME || 'BotAFK',
   version: process.env.MC_VERSION || '1.20.1',
   auth: process.env.MC_AUTH || 'offline',
   // Essayer de se connecter en mode "client vanilla" même sur Forge
