@@ -15,7 +15,7 @@ function startBot () {
     host: 'TheOnly.aternos.me',
     port: 26754,
     username: 'BotAFK',
-    version: '1.21.11',
+    version: '1.20.1',
     auth: 'offline'
   })
 
