@@ -4,7 +4,7 @@
   "description": "Bot AFK Minecraft 1.20.1",
   "main": "index.js",
   "scripts": {
-    "start": "node bot.js"
+    "start": "node index.js"
   },
   "dependencies": {
     "mineflayer": "4.17.0"
