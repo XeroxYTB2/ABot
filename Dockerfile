@@ -1,22 +1,28 @@
-FROM eclipse-temurin:17-jdk-alpine
+FROM python:3.11-slim
+
+# Installer les dépendances système
+RUN apt-get update && apt-get install -y \
+    wget \
+    unzip \
+    openjdk-17-jre-headless \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Installation des dépendances
-RUN apk add --no-cache curl
-
-# Copie des scripts
+# Copier les fichiers de configuration
+COPY requirements.txt .
 COPY start.sh .
-COPY mods.txt .
+COPY bot/ ./bot/
+COPY config/ ./config/
 
-# Donne les permissions d'exécution
+# Installer les dépendances Python
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Créer les répertoires nécessaires
+RUN mkdir -p /app/minecraft /app/mods /app/logs
+
+# Donner les permissions
 RUN chmod +x start.sh
 
-# Port exposé (port Minecraft par défaut)
-EXPOSE 25565
-
-# Volume pour les données persistantes
-VOLUME ["/app/world", "/app/logs", "/app/config", "/app/mods"]
-
-# Commande de démarrage
 CMD ["./start.sh"]
