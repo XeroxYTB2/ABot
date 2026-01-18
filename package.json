@@ -1,14 +1,15 @@
 {
-  "name": "mc-afk-bot",
-  "version": "2.0.0",
+  "name": "aternos-afk-bot",
+  "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "mineflayer": "^4.16.0"
+    "mineflayer": "^4.15.0",
+    "minecraft-protocol": "^1.42.0"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=16.0.0"
   }
 }
