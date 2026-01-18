@@ -1,27 +1,11 @@
 {
-  "name": "minecraft-forge-afk-bot",
+  "name": "railway-minecraft-bot",
   "version": "1.0.0",
-  "description": "Bot AFK pour serveurs Forge avec Create",
   "main": "bot.js",
   "scripts": {
-    "start": "node bot.js",
-    "dev": "nodemon bot.js"
+    "start": "node bot.js"
   },
   "dependencies": {
-    "mineflayer": "^4.10.0",
-    "minecraft-protocol": "^1.43.0",
-    "minecraft-data": "^3.37.0",
-    "prismarine-auth": "^2.3.0",
-    "vec3": "^0.1.8",
-    "mineflayer-auto-eat": "^2.3.3",
-    "mineflayer-pathfinder": "^2.4.5",
-    "mineflayer-collectblock": "^1.4.0",
-    "node-fetch": "^2.6.9"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "mineflayer": "^4.10.0"
   }
 }
