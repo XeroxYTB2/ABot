@@ -1,36 +1,21 @@
 FROM node:18-alpine
 
-# Installer les dépendances système (sans npm config)
-RUN apk add --no-cache \
-    python3 \
-    make \
-    g++ \
-    git \
-    curl \
-    openjdk17-jre-headless
-
-# Définir python3 comme python par défaut (sans npm config)
-RUN ln -sf /usr/bin/python3 /usr/bin/python
+# Installer Java pour Minecraft
+RUN apk add --no-cache openjdk17-jre-headless
 
 WORKDIR /app
 
-# Copier package.json d'abord
-COPY package*.json ./
+# Copier les fichiers de dépendances
+COPY package.json package-lock.json ./
 
-# Installer les dépendances
-RUN npm ci --only=production
+# Installer les dépendances PRODUCTION uniquement
+RUN npm ci --omit=dev
 
-# Copier le reste des fichiers
+# Copier le code source
 COPY . .
 
-# Créer les dossiers nécessaires
-RUN mkdir -p /app/logs
-
-# Variables d'environnement
-ENV NODE_ENV=production
-ENV PORT=8080
-
-# Exposer le port pour health checks
+# Port pour health check Railway
 EXPOSE 8080
 
+# Démarrer l'application
 CMD ["node", "bot.js"]
