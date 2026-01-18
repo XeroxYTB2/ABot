@@ -44,6 +44,13 @@ const config = {
     auth: process.env.MC_AUTH || 'offline'
 };
 
+// Configuration des mods Forge 1.20.1
+const FORGE_MODS = [
+    { modid: 'minecraft', version: '1.20.1' },
+    { modid: 'forge', version: '47.3.0' },
+    { modid: 'create', version: '1.20.1-6.0.8' }
+];
+
 // Whitelist par défaut avec Xrox_
 const WHITELIST = (process.env.WHITELIST || 'Xrox_').split(',').map(name => name.trim());
 
@@ -124,7 +131,7 @@ function performStableAntiAFK() {
 const commands = {
     '!help': {
         desc: 'Liste des commandes',
-        execute: () => bot.chat('📋 Commandes: !help, !pos, !ping, !afk [on/off], !info, !sit, !stand, !wave, !players, !status, !uptime, !whitelist')
+        execute: () => bot.chat('📋 Commandes: !help, !pos, !ping, !afk [on/off], !info, !sit, !stand, !wave, !players, !status, !uptime, !whitelist, !mods')
     },
     '!pos': {
         desc: 'Position du bot',
@@ -206,6 +213,13 @@ const commands = {
     '!whitelist': {
         desc: 'Voir la whitelist',
         execute: () => bot.chat(`🔒 Whitelist: ${WHITELIST.join(', ')}`)
+    },
+    '!mods': {
+        desc: 'Voir les mods configurés',
+        execute: () => {
+            const modList = FORGE_MODS.map(mod => mod.modid).join(', ');
+            bot.chat(`🛠️ Mods Forge: ${modList}`);
+        }
     }
 };
 
@@ -270,11 +284,9 @@ function createBot() {
             checkTimeoutInterval: 60000,
             hideErrors: false,
             
-            // Options Forge minimales
+            // CONFIGURATION FORGE AVEC MODS
             forgeOptions: {
-                forgeMods: [
-                    { modid: 'minecraft', version: config.version }
-                ]
+                forgeMods: FORGE_MODS
             }
         });
         
@@ -299,62 +311,30 @@ function setupBotEvents() {
         lastActivity = Date.now();
         console.log('📍 Bot spawné avec succès');
         
+        // Afficher les infos Forge
+        console.log(`🛠️ Bot connecté avec ${FORGE_MODS.length} mods Forge`);
+        
         // Démarrer l'anti-AFK après 10 secondes
         setTimeout(() => {
             if (isConnected) {
                 startAntiAFK();
                 console.log('🤖 Anti-AFK activé');
-                bot.chat('✅ Bot connecté et stable ! Tape !help pour les commandes');
+                bot.chat('✅ Bot Forge 1.20.1 connecté ! Tape !help pour les commandes');
             }
         }, 10000);
     });
     
-    // GESTION DES MESSAGES CORRIGÉE
-    // Utiliser l'événement 'messagestr' qui donne le message en string
-    bot.on('messagestr', (message) => {
-        try {
-            console.log(`💬 Message reçu: ${message}`);
-            
-            // Extraire le nom d'utilisateur du message formaté
-            // Format typique: "<NomJoueur> message" ou "NomJoueur: message"
-            let username = null;
-            let cleanMessage = message;
-            
-            // Chercher les patterns courants
-            if (message.includes('<') && message.includes('>')) {
-                // Format: <NomJoueur> message
-                const match = message.match(/<([^>]+)>\s*(.*)/);
-                if (match) {
-                    username = match[1];
-                    cleanMessage = match[2];
-                }
-            } else if (message.includes(': ')) {
-                // Format: NomJoueur: message
-                const parts = message.split(': ');
-                username = parts[0];
-                cleanMessage = parts.slice(1).join(': ');
-            } else if (message.startsWith('* ')) {
-                // Format: * NomJoueur action
-                const match = message.match(/\*\s*([^\s]+)\s+(.*)/);
-                if (match) {
-                    username = match[1];
-                    cleanMessage = match[2];
-                }
-            }
-            
-            // Si on a trouvé un username et que le message commence par !
-            if (username && cleanMessage.startsWith('!')) {
-                console.log(`👤 Joueur détecté: ${username}, Commande: ${cleanMessage}`);
-                handleCommand(cleanMessage, username);
-            }
-        } catch (err) {
-            console.log('⚠️ Erreur traitement message:', err.message);
-        }
+    // Événement spécifique Forge
+    bot.on('forgeMods', (mods) => {
+        console.log('📦 Mods du serveur détectés:');
+        mods.forEach(mod => {
+            console.log(`   - ${mod.modid} v${mod.version}`);
+        });
     });
     
-    // AUSSI capturer l'événement 'chat' pour plus de fiabilité
+    // GESTION DES MESSAGES CORRIGÉE
     bot.on('chat', (username, message) => {
-        console.log(`💬 Chat de ${username}: ${message}`);
+        console.log(`💬 ${username}: ${message}`);
         if (message.startsWith('!')) {
             handleCommand(message, username);
         }
@@ -509,10 +489,11 @@ function gracefulShutdown() {
 // INFOS DE DÉMARRAGE
 // ======================
 
-console.log('🤖 Démarrage du Bot Stable');
+console.log('🤖 Démarrage du Bot Forge 1.20.1');
 console.log('==============================');
 console.log(`Health check: Port ${WEB_PORT}`);
 console.log(`Serveur Minecraft: ${config.host}:${config.port}`);
 console.log(`Bot: ${config.username}`);
 console.log(`Whitelist: ${WHITELIST.join(', ')}`);
+console.log(`Mods Forge: ${FORGE_MODS.length} mods configurés`);
 console.log('==============================');
