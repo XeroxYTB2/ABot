@@ -1,19 +1,13 @@
 {
-  "name": "minecraft-forge-bot",
+  "name": "mc-bot-auto-mods",
   "version": "2.0.0",
-  "description": "Bot pour serveur Minecraft Forge 1.20.1 moddé",
+  "description": "Bot Minecraft avec détection automatique des mods",
   "main": "bot.js",
   "scripts": {
-    "start": "node bot.js",
-    "test": "echo \"No tests\" && exit 0"
+    "start": "node bot.js"
   },
   "dependencies": {
     "mineflayer": "^4.15.1",
-    "mineflayer-pathfinder": "^2.4.5",
-    "minecraft-data": "^3.61.0",
     "express": "^4.18.2"
-  },
-  "engines": {
-    "node": ">=18.0.0"
   }
 }
