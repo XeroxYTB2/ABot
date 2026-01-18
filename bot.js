@@ -1,6 +1,40 @@
 const mineflayer = require('mineflayer');
 const express = require('express');
 
+// ======================
+// 1. DÉMARRER EXPRESS EN PREMIER
+// ======================
+
+// Configuration Railway
+const WEB_PORT = process.env.PORT || 3000;
+
+// Créer et démarrer Express IMMÉDIATEMENT
+const app = express();
+
+// Health check simple et rapide
+app.get('/health', (req, res) => {
+    res.status(200).json({ 
+        status: 'ok',
+        bot: bot ? (isConnected ? 'connected' : 'disconnected') : 'not_created',
+        timestamp: Date.now()
+    });
+});
+
+app.get('/', (req, res) => {
+    res.send('🤖 Minecraft Bot - Online');
+});
+
+// Démarrer le serveur web IMMÉDIATEMENT
+const server = app.listen(WEB_PORT, () => {
+    console.log(`✅ Serveur web démarré sur le port ${WEB_PORT}`);
+    console.log(`✅ Health check: http://localhost:${WEB_PORT}/health`);
+    
+    // Maintenant qu'Express tourne, on démarre le bot
+    setTimeout(() => {
+        createBot();
+    }, 1000);
+});
+
 // Configuration de base
 const config = {
     host: process.env.MC_HOST || 'localhost',
@@ -12,27 +46,6 @@ const config = {
 
 // Whitelist par défaut avec Xrox_
 const WHITELIST = (process.env.WHITELIST || 'Xrox_').split(',').map(name => name.trim());
-
-// Configuration Railway
-const WEB_PORT = process.env.PORT || 3000;
-
-// Serveur web minimal
-const app = express();
-app.get('/health', (req, res) => {
-    res.status(200).json({ 
-        status: 'ok', 
-        bot: bot ? 'connected' : 'disconnected',
-        whitelist: WHITELIST
-    });
-});
-
-app.get('/', (req, res) => {
-    res.send('🤖 Minecraft Bot (Stable Edition)');
-});
-
-app.listen(WEB_PORT, () => {
-    console.log(`🌐 Health check: http://localhost:${WEB_PORT}/health`);
-});
 
 let bot = null;
 let isConnected = false;
@@ -72,7 +85,7 @@ function startAntiAFK() {
         if (bot && isConnected) {
             performStableAntiAFK();
         }
-    }, 45000); // 45 secondes pour être safe
+    }, 45000);
 }
 
 function performStableAntiAFK() {
@@ -183,4 +196,272 @@ const commands = {
     '!uptime': {
         desc: 'Temps de fonctionnement',
         execute: () => {
-            const uptime = Math.floor(process.uptime
+            const uptime = Math.floor(process.uptime());
+            const hours = Math.floor(uptime / 3600);
+            const minutes = Math.floor((uptime % 3600) / 60);
+            const seconds = uptime % 60;
+            bot.chat(`⏱️ Uptime: ${hours}h ${minutes}m ${seconds}s`);
+        }
+    },
+    '!whitelist': {
+        desc: 'Voir la whitelist',
+        execute: () => bot.chat(`🔒 Whitelist: ${WHITELIST.join(', ')}`)
+    }
+};
+
+// ======================
+// GESTION DES COMMANDES
+// ======================
+
+function handleCommand(message, sender) {
+    if (!isWhitelisted(sender)) {
+        console.log(`🚫 Commande bloquée de ${sender}: ${message}`);
+        return;
+    }
+    
+    const args = message.trim().split(' ');
+    const cmd = args[0].toLowerCase();
+    
+    if (!commands[cmd]) {
+        bot.chat(`❌ Commande inconnue. Tape !help`);
+        return;
+    }
+    
+    console.log(`✅ Commande de ${sender}: ${message}`);
+    
+    try {
+        commands[cmd].execute(args.slice(1));
+    } catch (err) {
+        console.log(`❌ Erreur commande ${cmd}:`, err.message);
+        bot.chat('⚠️ Erreur lors de l\'exécution');
+    }
+}
+
+// ======================
+// GESTION CONNEXION STABLE
+// ======================
+
+function createBot() {
+    console.log(`🚀 Connexion à ${config.host}:${config.port}...`);
+    
+    try {
+        bot = mineflayer.createBot({
+            host: config.host,
+            port: config.port,
+            username: config.username,
+            version: config.version,
+            auth: config.auth,
+            
+            // Configuration minimale pour stabilité
+            connectTimeout: 45000,
+            keepAlive: true,
+            checkTimeoutInterval: 60000,
+            hideErrors: false,
+            
+            // Options Forge minimales
+            forgeOptions: {
+                forgeMods: [
+                    { modid: 'minecraft', version: config.version }
+                ]
+            }
+        });
+        
+        setupBotEvents();
+        
+    } catch (err) {
+        console.error('❌ Erreur création bot:', err.message);
+        scheduleReconnect();
+    }
+}
+
+function setupBotEvents() {
+    // Événement de connexion
+    bot.once('login', () => {
+        console.log('✅ Authentification réussie');
+    });
+    
+    bot.once('spawn', () => {
+        isConnected = true;
+        lastActivity = Date.now();
+        console.log('📍 Bot spawné avec succès');
+        
+        // Démarrer l'anti-AFK après 10 secondes
+        setTimeout(() => {
+            if (isConnected) {
+                startAntiAFK();
+                console.log('🤖 Anti-AFK activé');
+                bot.chat('✅ Bot connecté et stable ! Tape !help');
+            }
+        }, 10000);
+    });
+    
+    // Gestion des messages
+    bot.on('message', (jsonMsg) => {
+        try {
+            const message = jsonMsg.toString();
+            const sender = jsonMsg.getSender ? jsonMsg.getSender() : null;
+            
+            if (sender && message.startsWith('!')) {
+                handleCommand(message, sender);
+            }
+        } catch (err) {
+            console.log('⚠️ Erreur traitement message:', err.message);
+        }
+    });
+    
+    // Événements de déconnexion
+    bot.on('end', (reason) => {
+        console.log(`🔌 Déconnexion: ${reason || 'Raison inconnue'}`);
+        handleDisconnection();
+    });
+    
+    bot.on('kicked', (reason) => {
+        console.log(`👢 Kick: ${reason}`);
+        handleDisconnection();
+    });
+    
+    bot.on('error', (err) => {
+        console.error(`❌ Erreur: ${err.message}`);
+        if (err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT') {
+            handleDisconnection();
+        }
+    });
+    
+    // Événements utiles pour le debug
+    bot.on('playerJoined', (player) => {
+        console.log(`👋 ${player.username} a rejoint`);
+    });
+    
+    bot.on('playerLeft', (player) => {
+        console.log(`👋 ${player.username} a quitté`);
+    });
+}
+
+// ======================
+// GESTION RECONNEXION INTELLIGENTE
+// ======================
+
+let reconnectAttempts = 0;
+let reconnectTimeout = null;
+
+function handleDisconnection() {
+    isConnected = false;
+    
+    if (antiAFKInterval) {
+        clearInterval(antiAFKInterval);
+        antiAFKInterval = null;
+    }
+    
+    if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+    }
+    
+    reconnectAttempts++;
+    
+    // Réduction progressive des tentatives
+    const maxAttempts = Math.min(20, 5 + reconnectAttempts);
+    
+    if (reconnectAttempts > maxAttempts) {
+        console.log('🔄 Trop de tentatives, attente de 5 minutes...');
+        reconnectAttempts = 0;
+        reconnectTimeout = setTimeout(() => {
+            createBot();
+        }, 300000);
+        return;
+    }
+    
+    // Délai exponentiel avec limite
+    const baseDelay = 5000;
+    const maxDelay = 120000;
+    const delay = Math.min(baseDelay * Math.pow(1.5, reconnectAttempts - 1), maxDelay);
+    
+    console.log(`🔄 Reconnexion dans ${Math.round(delay/1000)}s (tentative ${reconnectAttempts})`);
+    
+    reconnectTimeout = setTimeout(() => {
+        if (bot) {
+            try {
+                bot.end();
+                bot = null;
+            } catch (err) {
+                // Ignorer les erreurs de fermeture
+            }
+        }
+        createBot();
+    }, delay);
+}
+
+// ======================
+// SANTÉ DU BOT
+// ======================
+
+// Vérifier périodiquement la connexion
+setInterval(() => {
+    if (isConnected && bot) {
+        const inactiveTime = Date.now() - lastActivity;
+        if (inactiveTime > 300000) { // 5 minutes d'inactivité
+            console.log('⚠️ Aucune activité depuis 5 minutes, vérification...');
+            // Tester la connexion avec une action simple
+            try {
+                bot.setControlState('jump', true);
+                setTimeout(() => {
+                    if (bot) bot.setControlState('jump', false);
+                }, 100);
+                lastActivity = Date.now();
+            } catch (err) {
+                console.log('⚠️ Connexion perdue, reconnexion...');
+                handleDisconnection();
+            }
+        }
+    }
+}, 60000);
+
+// ======================
+// GESTION DES ARRÊTS
+// ======================
+
+process.on('SIGTERM', () => {
+    console.log('🛑 Arrêt demandé (SIGTERM)');
+    gracefulShutdown();
+});
+
+process.on('SIGINT', () => {
+    console.log('🛑 Arrêt demandé (SIGINT)');
+    gracefulShutdown();
+});
+
+function gracefulShutdown() {
+    if (antiAFKInterval) {
+        clearInterval(antiAFKInterval);
+    }
+    
+    if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+    }
+    
+    if (bot) {
+        try {
+            bot.quit('Arrêt propre');
+        } catch (err) {
+            // Ignorer
+        }
+    }
+    
+    setTimeout(() => {
+        console.log('👋 Bot arrêté');
+        server.close(() => {
+            process.exit(0);
+        });
+    }, 1000);
+}
+
+// ======================
+// INFOS DE DÉMARRAGE
+// ======================
+
+console.log('🤖 Démarrage du Bot Stable');
+console.log('==============================');
+console.log(`Health check: Port ${WEB_PORT}`);
+console.log(`Serveur Minecraft: ${config.host}:${config.port}`);
+console.log(`Bot: ${config.username}`);
+console.log(`Whitelist: ${WHITELIST.join(', ')}`);
+console.log('==============================');
