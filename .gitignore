@@ -1,6 +1,16 @@
-node_modules/
-npm-debug.log
-.env
+# Fichiers Minecraft/Forge
+world/
+logs/
+crash-reports/
+debug/
+server.jar
+forge-*.jar
+*.log
+*.cache
+/libraries/
+/versions/
+
+# Fichiers système
 .DS_Store
-*.mcworld
-*.zip
+Thumbs.db
+*.bak
