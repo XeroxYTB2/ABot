@@ -1,93 +1,122 @@
 const mineflayer = require('mineflayer');
-const http = require('http');
 
-// Mini serveur HTTP pour Railway
-const server = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ 
-    status: 'ok',
-    bot: 'Minecraft AFK Bot',
-    connected: bot ? 'connected' : 'disconnected'
-  }));
-});
-
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`🌐 Serveur HTTP sur le port ${PORT}`);
-});
-
-// Configuration
-const config = {
-  host: process.env.SERVER_HOST || 'localhost',
-  port: parseInt(process.env.SERVER_PORT) || 25565,
-  username: process.env.BOT_USERNAME || 'AFKBot',
-  password: process.env.BOT_PASSWORD || '',
-  version: process.env.MC_VERSION || '1.21.1'
-};
+console.log('🚀 Démarrage du bot AFK Minecraft...');
 
 let bot = null;
+let reconnectAttempts = 0;
+let reconnectDelay = 10000; // 10 secondes initialement
+const maxReconnectDelay = 300000; // 5 minutes maximum
 
-// Fonction pour créer le bot
-function createBot() {
-  console.log('🔄 Connexion au serveur Minecraft...');
+function connectBot() {
+  console.log(`🔄 Tentative de connexion #${reconnectAttempts + 1}...`);
   
   bot = mineflayer.createBot({
-    host: config.host,
-    port: config.port,
-    username: config.username,
-    version: config.version
-    // Pas d'auth Microsoft pour simplifier
-    // Si vous utilisez un compte premium, ajoutez: auth: 'microsoft'
+    host: process.env.SERVER_HOST,
+    port: parseInt(process.env.SERVER_PORT) || 25565,
+    username: process.env.BOT_USERNAME || 'AFKBot',
+    version: process.env.MC_VERSION || '1.21.1',
+    checkTimeoutInterval: 60000, // Vérifie la connexion toutes les 60s
+    hideErrors: true // Cache les erreurs mineures
   });
 
-  // Événements
   bot.on('login', () => {
-    console.log(`✅ Connecté en tant que ${bot.username}`);
-    console.log(`📡 Serveur: ${config.host}:${config.port}`);
+    console.log(`✅ Connecté: ${bot.username}`);
+    console.log(`📡 Serveur: ${process.env.SERVER_HOST}:${process.env.SERVER_PORT}`);
+    reconnectAttempts = 0; // Réinitialise le compteur
+    reconnectDelay = 10000; // Réinitialise le délai
   });
 
   bot.on('spawn', () => {
-    console.log('👤 Bot spawné dans le monde');
+    console.log('👤 Spawn réussi - Bot en AFK');
     
     // Anti-AFK simple
     setInterval(() => {
       if (bot.entity) {
-        // Tourne la tête
-        bot.look(bot.entity.yaw + 0.1, bot.entity.pitch, false);
+        // Tourne la tête légèrement
+        bot.look(bot.entity.yaw + 0.5, bot.entity.pitch, false);
         console.log('🔄 Mouvement anti-AFK');
       }
-    }, 30000);
-  });
-
-  bot.on('death', () => {
-    console.log('💀 Bot mort');
+    }, 30000); // Toutes les 30 secondes
+    
+    // Saut occasionnel
+    setInterval(() => {
+      if (bot.entity) {
+        bot.setControlState('jump', true);
+        setTimeout(() => bot.setControlState('jump', false), 200);
+        console.log('🦘 Petit saut');
+      }
+    }, 120000); // Toutes les 2 minutes
   });
 
   bot.on('kicked', (reason) => {
-    console.log('🚫 Kick:', reason);
-    setTimeout(createBot, 10000);
+    console.log(`🚫 Kick: ${reason}`);
+    
+    // Augmente le délai progressivement
+    reconnectAttempts++;
+    reconnectDelay = Math.min(reconnectDelay * 1.5, maxReconnectDelay);
+    
+    console.log(`⏳ Prochaine tentative dans ${Math.round(reconnectDelay/1000)} secondes...`);
+    
+    setTimeout(() => {
+      if (bot) bot.end();
+      connectBot();
+    }, reconnectDelay);
   });
 
   bot.on('error', (err) => {
-    console.error('❌ Erreur:', err.message);
-    setTimeout(createBot, 15000);
+    console.error(`❌ Erreur: ${err.message}`);
+    
+    // Délai plus long pour les erreurs
+    reconnectDelay = Math.min(reconnectDelay * 2, maxReconnectDelay);
+    
+    console.log(`⏳ Reconnexion dans ${Math.round(reconnectDelay/1000)} secondes...`);
+    
+    setTimeout(() => {
+      if (bot) bot.end();
+      connectBot();
+    }, reconnectDelay);
   });
 
   bot.on('end', () => {
-    console.log('🔌 Déconnecté');
-    setTimeout(createBot, 5000);
+    console.log('🔌 Déconnexion du serveur');
+    
+    // Délai normal pour les déconnexions normales
+    reconnectDelay = Math.min(reconnectDelay * 1.2, 60000); // Max 1 minute
+    
+    console.log(`⏳ Reconnexion dans ${Math.round(reconnectDelay/1000)} secondes...`);
+    
+    setTimeout(() => {
+      connectBot();
+    }, reconnectDelay);
   });
 
-  return bot;
+  // Gestion de l'expiration de la session
+  bot.on('sessionExpired', () => {
+    console.log('🔑 Session expirée - Reconnexion...');
+    setTimeout(() => {
+      if (bot) bot.end();
+      connectBot();
+    }, 10000);
+  });
 }
 
-// Démarrer
-createBot();
+// Démarrer la première connexion
+connectBot();
 
-// Nettoyage
+// Garde le processus actif
 process.on('SIGINT', () => {
-  console.log('\n👋 Arrêt...');
+  console.log('\n👋 Arrêt du bot...');
   if (bot) bot.end();
-  server.close();
-  process.exit();
+  process.exit(0);
+});
+
+// Gestion des erreurs non catchées
+process.on('uncaughtException', (err) => {
+  console.error('💥 Erreur non gérée:', err.message);
+  console.log('🔄 Redémarrage dans 30 secondes...');
+  
+  setTimeout(() => {
+    if (bot) bot.end();
+    connectBot();
+  }, 30000);
 });
