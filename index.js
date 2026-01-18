@@ -12,10 +12,10 @@ function startBot () {
   console.log('🚀 Lancement du bot...')
 
   const bot = mineflayer.createBot({
-    host: 'TheOnly.exaroton.me',
-    port: 52424,
+    host: 'TheOnly.aternos.me',
+    port: 26754,
     username: 'BotAFK',
-    version: '1.20.1',
+    version: '1.21.11',
     auth: 'offline'
   })
 
