@@ -124,7 +124,7 @@ function performStableAntiAFK() {
 const commands = {
     '!help': {
         desc: 'Liste des commandes',
-        execute: () => bot.chat('📋 Commandes: !help, !pos, !ping, !afk [on/off], !info, !sit, !stand, !wave, !players, !status, !uptime')
+        execute: () => bot.chat('📋 Commandes: !help, !pos, !ping, !afk [on/off], !info, !sit, !stand, !wave, !players, !status, !uptime, !whitelist')
     },
     '!pos': {
         desc: 'Position du bot',
@@ -210,24 +210,36 @@ const commands = {
 };
 
 // ======================
-// GESTION DES COMMANDES
+// GESTION DES COMMANDES (CORRIGÉE)
 // ======================
 
-function handleCommand(message, sender) {
-    if (!isWhitelisted(sender)) {
-        console.log(`🚫 Commande bloquée de ${sender}: ${message}`);
-        return;
-    }
+function handleCommand(message, username) {
+    // Vérifier si le message est une commande
+    if (!message.startsWith('!')) return;
     
+    // Extraire la commande
     const args = message.trim().split(' ');
     const cmd = args[0].toLowerCase();
     
-    if (!commands[cmd]) {
-        bot.chat(`❌ Commande inconnue. Tape !help`);
+    // Vérifier la whitelist
+    if (!isWhitelisted(username)) {
+        console.log(`🚫 Commande bloquée de ${username}: ${message}`);
+        // Envoyer un message privé au joueur
+        if (bot && bot.players[username]) {
+            bot.whisper(username, '❌ Tu n\'es pas autorisé à utiliser les commandes.');
+        }
         return;
     }
     
-    console.log(`✅ Commande de ${sender}: ${message}`);
+    // Vérifier si la commande existe
+    if (!commands[cmd]) {
+        if (bot && bot.players[username]) {
+            bot.whisper(username, `❌ Commande inconnue: ${cmd}. Tape !help`);
+        }
+        return;
+    }
+    
+    console.log(`✅ Commande de ${username}: ${message}`);
     
     try {
         commands[cmd].execute(args.slice(1));
@@ -270,7 +282,9 @@ function createBot() {
         
     } catch (err) {
         console.error('❌ Erreur création bot:', err.message);
-        scheduleReconnect();
+        setTimeout(() => {
+            createBot();
+        }, 5000);
     }
 }
 
@@ -290,22 +304,59 @@ function setupBotEvents() {
             if (isConnected) {
                 startAntiAFK();
                 console.log('🤖 Anti-AFK activé');
-                bot.chat('✅ Bot connecté et stable ! Tape !help');
+                bot.chat('✅ Bot connecté et stable ! Tape !help pour les commandes');
             }
         }, 10000);
     });
     
-    // Gestion des messages
-    bot.on('message', (jsonMsg) => {
+    // GESTION DES MESSAGES CORRIGÉE
+    // Utiliser l'événement 'messagestr' qui donne le message en string
+    bot.on('messagestr', (message) => {
         try {
-            const message = jsonMsg.toString();
-            const sender = jsonMsg.getSender ? jsonMsg.getSender() : null;
+            console.log(`💬 Message reçu: ${message}`);
             
-            if (sender && message.startsWith('!')) {
-                handleCommand(message, sender);
+            // Extraire le nom d'utilisateur du message formaté
+            // Format typique: "<NomJoueur> message" ou "NomJoueur: message"
+            let username = null;
+            let cleanMessage = message;
+            
+            // Chercher les patterns courants
+            if (message.includes('<') && message.includes('>')) {
+                // Format: <NomJoueur> message
+                const match = message.match(/<([^>]+)>\s*(.*)/);
+                if (match) {
+                    username = match[1];
+                    cleanMessage = match[2];
+                }
+            } else if (message.includes(': ')) {
+                // Format: NomJoueur: message
+                const parts = message.split(': ');
+                username = parts[0];
+                cleanMessage = parts.slice(1).join(': ');
+            } else if (message.startsWith('* ')) {
+                // Format: * NomJoueur action
+                const match = message.match(/\*\s*([^\s]+)\s+(.*)/);
+                if (match) {
+                    username = match[1];
+                    cleanMessage = match[2];
+                }
+            }
+            
+            // Si on a trouvé un username et que le message commence par !
+            if (username && cleanMessage.startsWith('!')) {
+                console.log(`👤 Joueur détecté: ${username}, Commande: ${cleanMessage}`);
+                handleCommand(cleanMessage, username);
             }
         } catch (err) {
             console.log('⚠️ Erreur traitement message:', err.message);
+        }
+    });
+    
+    // AUSSI capturer l'événement 'chat' pour plus de fiabilité
+    bot.on('chat', (username, message) => {
+        console.log(`💬 Chat de ${username}: ${message}`);
+        if (message.startsWith('!')) {
+            handleCommand(message, username);
         }
     });
     
