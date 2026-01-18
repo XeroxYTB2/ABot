@@ -1,23 +1,22 @@
-FROM node:18-alpine
-
-# Installer les dépendances système si nécessaire
-RUN apk add --no-cache python3 make g++ git
+FROM eclipse-temurin:17-jdk-alpine
 
 WORKDIR /app
 
-# Copier les fichiers de dépendances
-COPY package*.json ./
+# Installation des dépendances
+RUN apk add --no-cache curl
 
-# CHANGEMENT ICI : Utiliser npm install au lieu de npm ci
-RUN npm install --production --legacy-peer-deps
+# Copie des scripts
+COPY start.sh .
+COPY mods.txt .
 
-# Copier le code source
-COPY . .
+# Donne les permissions d'exécution
+RUN chmod +x start.sh
 
-# Créer un utilisateur non-root pour la sécurité
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S botuser -u 1001
-USER botuser
+# Port exposé (port Minecraft par défaut)
+EXPOSE 25565
 
-# Démarrer l'application
-CMD ["node", "bot.js"]
+# Volume pour les données persistantes
+VOLUME ["/app/world", "/app/logs", "/app/config", "/app/mods"]
+
+# Commande de démarrage
+CMD ["./start.sh"]
