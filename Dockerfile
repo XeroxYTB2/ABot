@@ -1,28 +1,37 @@
-FROM python:3.11-slim
+FROM node:18-alpine
 
 # Installer les dépendances système
-RUN apt-get update && apt-get install -y \
-    wget \
-    unzip \
-    openjdk-17-jre-headless \
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    git \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    openjdk17-jre \
+    && npm config set python /usr/bin/python3
 
 WORKDIR /app
 
-# Copier les fichiers de configuration
-COPY requirements.txt .
-COPY start.sh .
-COPY bot/ ./bot/
-COPY config/ ./config/
+# Copier les fichiers package d'abord pour meilleur caching
+COPY package*.json ./
 
-# Installer les dépendances Python
-RUN pip install --no-cache-dir -r requirements.txt
+# Installer les dépendances
+RUN npm ci --only=production
 
-# Créer les répertoires nécessaires
-RUN mkdir -p /app/minecraft /app/mods /app/logs
+# Copier le reste des fichiers
+COPY . .
 
-# Donner les permissions
+# Créer les dossiers nécessaires
+RUN mkdir -p /app/logs /app/config
+
+# Rendre les scripts exécutables
 RUN chmod +x start.sh
+
+# Variables d'environnement
+ENV NODE_ENV=production
+ENV PORT=8080
+
+# Exposer le port pour health checks
+EXPOSE 8080
 
 CMD ["./start.sh"]
