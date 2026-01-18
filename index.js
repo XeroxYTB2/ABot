@@ -1,122 +1,171 @@
 const mineflayer = require('mineflayer');
 
-console.log('🚀 Démarrage du bot AFK Minecraft...');
+console.log('🚀 Bot AFK pour serveur Aternos');
+console.log('📡 Serveur cible:', process.env.SERVER_HOST);
 
 let bot = null;
+let isConnecting = false;
 let reconnectAttempts = 0;
-let reconnectDelay = 10000; // 10 secondes initialement
-const maxReconnectDelay = 300000; // 5 minutes maximum
+const maxReconnectAttempts = 5;
+const aternosWaitTime = 60000; // 60 secondes minimum pour Aternos
+let reconnectTimer = null;
 
-function connectBot() {
-  console.log(`🔄 Tentative de connexion #${reconnectAttempts + 1}...`);
+// Fonction pour se connecter
+function connectToServer() {
+  if (isConnecting) {
+    console.log('⚠️ Une connexion est déjà en cours, attente...');
+    return;
+  }
   
-  bot = mineflayer.createBot({
+  isConnecting = true;
+  reconnectAttempts++;
+  
+  console.log(`🔄 Tentative ${reconnectAttempts}/${maxReconnectAttempts}...`);
+  
+  // Configuration pour Aternos
+  const options = {
     host: process.env.SERVER_HOST,
     port: parseInt(process.env.SERVER_PORT) || 25565,
     username: process.env.BOT_USERNAME || 'AFKBot',
     version: process.env.MC_VERSION || '1.21.1',
-    checkTimeoutInterval: 60000, // Vérifie la connexion toutes les 60s
-    hideErrors: true // Cache les erreurs mineures
-  });
-
+    hideErrors: true,
+    checkTimeoutInterval: 30000,
+    connectTimeout: 30000 // Timeout de connexion de 30s
+  };
+  
+  // Si mot de passe Microsoft fourni
+  if (process.env.BOT_PASSWORD && process.env.BOT_PASSWORD !== '') {
+    options.auth = 'microsoft';
+    options.password = process.env.BOT_PASSWORD;
+  }
+  
+  console.log('🔗 Connexion en cours...');
+  
+  bot = mineflayer.createBot(options);
+  
+  // Gestion des événements
   bot.on('login', () => {
-    console.log(`✅ Connecté: ${bot.username}`);
-    console.log(`📡 Serveur: ${process.env.SERVER_HOST}:${process.env.SERVER_PORT}`);
-    reconnectAttempts = 0; // Réinitialise le compteur
-    reconnectDelay = 10000; // Réinitialise le délai
+    console.log(`✅ Connecté en tant que ${bot.username}`);
+    console.log('🎮 Bot prêt en mode AFK');
+    reconnectAttempts = 0;
+    isConnecting = false;
+    
+    // Une fois connecté, vérifier régulièrement si on est toujours connecté
+    setInterval(() => {
+      if (!bot || !bot.entity) {
+        console.log('⚠️ Bot semble déconnecté, vérification...');
+        checkConnection();
+      }
+    }, 10000);
   });
-
+  
   bot.on('spawn', () => {
-    console.log('👤 Spawn réussi - Bot en AFK');
+    console.log('📍 Position:', bot.entity.position);
     
-    // Anti-AFK simple
+    // Anti-AFK très discret pour Aternos
     setInterval(() => {
-      if (bot.entity) {
-        // Tourne la tête légèrement
-        bot.look(bot.entity.yaw + 0.5, bot.entity.pitch, false);
-        console.log('🔄 Mouvement anti-AFK');
+      if (bot && bot.entity) {
+        // Tourne la tête très légèrement
+        const newYaw = bot.entity.yaw + (Math.random() * 0.2 - 0.1);
+        bot.look(newYaw, bot.entity.pitch, false);
       }
-    }, 30000); // Toutes les 30 secondes
+    }, 45000); // 45 secondes
     
-    // Saut occasionnel
+    // Saut très rare
     setInterval(() => {
-      if (bot.entity) {
+      if (bot && bot.entity) {
         bot.setControlState('jump', true);
-        setTimeout(() => bot.setControlState('jump', false), 200);
-        console.log('🦘 Petit saut');
+        setTimeout(() => {
+          if (bot) bot.setControlState('jump', false);
+        }, 100);
       }
-    }, 120000); // Toutes les 2 minutes
+    }, 300000); // 5 minutes
   });
-
+  
   bot.on('kicked', (reason) => {
     console.log(`🚫 Kick: ${reason}`);
-    
-    // Augmente le délai progressivement
-    reconnectAttempts++;
-    reconnectDelay = Math.min(reconnectDelay * 1.5, maxReconnectDelay);
-    
-    console.log(`⏳ Prochaine tentative dans ${Math.round(reconnectDelay/1000)} secondes...`);
-    
-    setTimeout(() => {
-      if (bot) bot.end();
-      connectBot();
-    }, reconnectDelay);
+    handleDisconnection('kicked');
   });
-
+  
   bot.on('error', (err) => {
     console.error(`❌ Erreur: ${err.message}`);
-    
-    // Délai plus long pour les erreurs
-    reconnectDelay = Math.min(reconnectDelay * 2, maxReconnectDelay);
-    
-    console.log(`⏳ Reconnexion dans ${Math.round(reconnectDelay/1000)} secondes...`);
-    
-    setTimeout(() => {
-      if (bot) bot.end();
-      connectBot();
-    }, reconnectDelay);
+    handleDisconnection('error');
   });
-
-  bot.on('end', () => {
-    console.log('🔌 Déconnexion du serveur');
-    
-    // Délai normal pour les déconnexions normales
-    reconnectDelay = Math.min(reconnectDelay * 1.2, 60000); // Max 1 minute
-    
-    console.log(`⏳ Reconnexion dans ${Math.round(reconnectDelay/1000)} secondes...`);
-    
-    setTimeout(() => {
-      connectBot();
-    }, reconnectDelay);
-  });
-
-  // Gestion de l'expiration de la session
-  bot.on('sessionExpired', () => {
-    console.log('🔑 Session expirée - Reconnexion...');
-    setTimeout(() => {
-      if (bot) bot.end();
-      connectBot();
-    }, 10000);
+  
+  bot.on('end', (reason) => {
+    console.log('🔌 Déconnexion:', reason || 'non spécifiée');
+    handleDisconnection('end');
   });
 }
 
-// Démarrer la première connexion
-connectBot();
+// Gestion de la déconnexion
+function handleDisconnection(type) {
+  isConnecting = false;
+  
+  if (bot) {
+    try {
+      bot.end();
+    } catch (e) {
+      // Ignorer les erreurs de déconnexion
+    }
+    bot = null;
+  }
+  
+  // Calcul du délai selon le type de déconnexion
+  let delay = aternosWaitTime;
+  
+  if (type === 'kicked' && reconnectAttempts < maxReconnectAttempts) {
+    // Pour Aternos, on attend plus longtemps après un kick
+    delay = Math.min(aternosWaitTime * (reconnectAttempts + 1), 300000); // Max 5 minutes
+  } else if (reconnectAttempts >= maxReconnectAttempts) {
+    // Après trop de tentatives, on attend très longtemps
+    console.log('⏸️ Trop de tentatives, pause de 10 minutes...');
+    delay = 600000; // 10 minutes
+    reconnectAttempts = 0;
+  }
+  
+  console.log(`⏳ Prochaine tentative dans ${Math.round(delay/1000)} secondes...`);
+  
+  // Annuler le timer précédent si existe
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+  }
+  
+  // Programmer la reconnexion
+  reconnectTimer = setTimeout(() => {
+    console.log('🔄 Reprise de la connexion...');
+    connectToServer();
+  }, delay);
+}
 
-// Garde le processus actif
+// Vérification de la connexion
+function checkConnection() {
+  if (!bot || !bot.entity) {
+    console.log('🔍 Vérification: Bot déconnecté');
+    handleDisconnection('check');
+  }
+}
+
+// Démarrer la première connexion avec un délai initial
+console.log('⏳ Démarrage dans 10 secondes...');
+setTimeout(() => {
+  connectToServer();
+}, 10000);
+
+// Nettoyage
 process.on('SIGINT', () => {
-  console.log('\n👋 Arrêt du bot...');
+  console.log('\n👋 Arrêt propre du bot...');
+  if (reconnectTimer) clearTimeout(reconnectTimer);
   if (bot) bot.end();
   process.exit(0);
 });
 
-// Gestion des erreurs non catchées
-process.on('uncaughtException', (err) => {
-  console.error('💥 Erreur non gérée:', err.message);
-  console.log('🔄 Redémarrage dans 30 secondes...');
-  
-  setTimeout(() => {
-    if (bot) bot.end();
-    connectBot();
-  }, 30000);
+// Gestion des erreurs non attrapées
+process.on('uncaughtException', (error) => {
+  console.error('💥 Erreur critique:', error.message);
+  handleDisconnection('uncaught');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('⚠️ Promise rejetée:', reason);
 });
