@@ -2,29 +2,37 @@ const mineflayer = require('mineflayer');
 const express = require('express');
 
 // ======================
-// CONFIGURATION
+// 1. DÉMARRER EXPRESS EN PREMIER
 // ======================
 
+// Configuration Railway
 const WEB_PORT = process.env.PORT || 3000;
+
+// Créer et démarrer Express IMMÉDIATEMENT
 const app = express();
 
+// Health check simple et rapide
 app.get('/health', (req, res) => {
     res.status(200).json({ 
         status: 'ok',
-        bot: bot ? 'connected' : 'disconnected',
-        serverMods: detectedServerMods.length,
+        bot: bot ? (isConnected ? 'connected' : 'disconnected') : 'not_created',
         timestamp: Date.now()
     });
 });
 
 app.get('/', (req, res) => {
-    res.send('🤖 Minecraft Bot - Auto Mod Detection');
+    res.send('🤖 Minecraft Bot - Online');
 });
 
+// Démarrer le serveur web IMMÉDIATEMENT
 const server = app.listen(WEB_PORT, () => {
+    console.log(`✅ Serveur web démarré sur le port ${WEB_PORT}`);
     console.log(`✅ Health check: http://localhost:${WEB_PORT}/health`);
-    console.log('🚀 Démarrage avec détection automatique des mods...');
-    setTimeout(connectWithModDetection, 2000);
+    
+    // Maintenant qu'Express tourne, on démarre le bot
+    setTimeout(() => {
+        createBot();
+    }, 1000);
 });
 
 // Configuration de base
@@ -36,53 +44,234 @@ const config = {
     auth: process.env.MC_AUTH || 'offline'
 };
 
-// Whitelist des commandes
+// Configuration des mods Forge 1.20.1
+const FORGE_MODS = [
+    { modid: 'minecraft', version: '1.20.1' },
+    { modid: 'mixinextras', version: '0.4.1' },
+    { modid: 'forge', version: '47.4.10' },
+    { modid: 'flywheel', version: '1.0.5' },
+    { modid: 'ponder', version: '1.0.91' },
+    { modid: 'create', version: '6.0.8' }
+];
+
+// Whitelist par défaut avec Xrox_
 const WHITELIST = (process.env.WHITELIST || 'Xrox_').split(',').map(name => name.trim());
-
-// Mods de base (toujours présents)
-const BASE_MODS = [
-    { modid: 'minecraft', version: config.version },
-    { modid: 'forge', version: '47.3.0' }
-];
-
-// Mods courants qu'on peut essayer d'ajouter automatiquement
-const COMMON_MODS = [
-    { modid: 'kotlinforforge', version: '4.10.0' },
-    { modid: 'architectury', version: '9.1.12' },
-    { modid: 'cloth_config', version: '11.1.118' },
-    { modid: 'jei', version: '15.0.0.12' },
-    { modid: 'journeymap', version: '5.9.18' },
-    { modid: 'terrablender', version: '3.0.0.9' },
-    { modid: 'selene', version: '2.10.4' },
-    { modid: 'moonlight', version: '2.8.46' },
-    { modid: 'create', version: '0.5.1.f' },
-    { modid: 'flywheel', version: '0.6.10' },
-    { modid: 'ae2', version: '15.0.9' },
-    { modid: 'mekanism', version: '10.4.0.16' }
-];
 
 let bot = null;
 let isConnected = false;
-let detectedServerMods = [];
-let currentModsList = [...BASE_MODS];
-let connectionAttempt = 0;
-const MAX_ATTEMPTS = 3;
+let antiAFKInterval = null;
+let lastActivity = Date.now();
 
 // ======================
-// DÉTECTION DES MODS
+// UTILITAIRES
 // ======================
 
-function connectWithModDetection() {
-    connectionAttempt++;
-    console.log(`🔍 Tentative ${connectionAttempt}/${MAX_ATTEMPTS}`);
-    console.log(`📦 Utilisation de ${currentModsList.length} mods: ${currentModsList.map(m => m.modid).join(', ')}`);
-    
-    if (bot) {
-        try {
-            bot.end();
-            bot = null;
-        } catch (e) {}
+function isWhitelisted(playerName) {
+    return WHITELIST.some(name => name.toLowerCase() === playerName.toLowerCase());
+}
+
+function safeBotAction(action, errorMsg) {
+    try {
+        if (bot && isConnected) {
+            action();
+            lastActivity = Date.now();
+            return true;
+        }
+        return false;
+    } catch (err) {
+        console.log(`⚠️ ${errorMsg}:`, err.message);
+        return false;
     }
+}
+
+// ======================
+// ANTI-AFK STABLE
+// ======================
+
+function startAntiAFK() {
+    if (antiAFKInterval) clearInterval(antiAFKInterval);
+    
+    antiAFKInterval = setInterval(() => {
+        if (bot && isConnected) {
+            performStableAntiAFK();
+        }
+    }, 45000);
+}
+
+function performStableAntiAFK() {
+    if (!bot || !isConnected) return;
+    
+    const actions = [
+        { action: 'look', args: [Math.random() * Math.PI * 2, (Math.random() * 0.3) - 0.15, false] },
+        { action: 'control', key: 'forward', duration: 1500 },
+        { action: 'control', key: 'left', duration: 1200 },
+        { action: 'control', key: 'right', duration: 1200 },
+        { action: 'control', key: 'back', duration: 1000 }
+    ];
+    
+    const selected = actions[Math.floor(Math.random() * actions.length)];
+    
+    try {
+        if (selected.action === 'look') {
+            bot.look(selected.args[0], selected.args[1], selected.args[2]);
+            console.log('🤖 Anti-AFK: Regarde autour');
+        } else if (selected.action === 'control') {
+            bot.setControlState(selected.key, true);
+            setTimeout(() => {
+                if (bot) bot.setControlState(selected.key, false);
+            }, selected.duration);
+            console.log(`🤖 Anti-AFK: ${selected.key} pendant ${selected.duration}ms`);
+        }
+    } catch (err) {
+        console.log('⚠️ Erreur Anti-AFK ignorée:', err.message);
+    }
+}
+
+// ======================
+// COMMANDES SIMPLES ET STABLES
+// ======================
+
+const commands = {
+    '!help': {
+        desc: 'Liste des commandes',
+        execute: () => bot.chat('📋 Commandes: !help, !pos, !ping, !afk [on/off], !info, !sit, !stand, !wave, !players, !status, !uptime, !whitelist, !mods')
+    },
+    '!pos': {
+        desc: 'Position du bot',
+        execute: () => {
+            const pos = bot.entity.position;
+            bot.chat(`📍 X: ${Math.floor(pos.x)} Y: ${Math.floor(pos.y)} Z: ${Math.floor(pos.z)}`);
+        }
+    },
+    '!ping': {
+        desc: 'Test de réponse',
+        execute: () => bot.chat('🏓 Pong!')
+    },
+    '!afk': {
+        desc: 'Gérer l\'anti-AFK',
+        execute: (args) => {
+            if (args[0] === 'on') {
+                startAntiAFK();
+                bot.chat('✅ Anti-AFK activé');
+            } else if (args[0] === 'off') {
+                if (antiAFKInterval) {
+                    clearInterval(antiAFKInterval);
+                    antiAFKInterval = null;
+                }
+                bot.chat('⏸️ Anti-AFK désactivé');
+            } else {
+                bot.chat('Usage: !afk on/off');
+            }
+        }
+    },
+    '!info': {
+        desc: 'Informations du bot',
+        execute: () => {
+            const health = bot.health || 'N/A';
+            const food = bot.food || 'N/A';
+            bot.chat(`🤖 ${bot.username} | ❤️ ${health}/20 | 🍖 ${food}/20`);
+        }
+    },
+    '!sit': {
+        desc: 'S\'asseoir',
+        execute: () => bot.chat('🪑 Je m\'assieds')
+    },
+    '!stand': {
+        desc: 'Se lever',
+        execute: () => bot.chat('🧍 Je me lève')
+    },
+    '!wave': {
+        desc: 'Saluer',
+        execute: () => bot.chat('👋 Bonjour !')
+    },
+    '!players': {
+        desc: 'Liste des joueurs',
+        execute: () => {
+            const players = Object.keys(bot.players || {}).filter(p => p !== bot.username);
+            if (players.length > 0) {
+                bot.chat(`👥 Joueurs en ligne (${players.length}): ${players.join(', ')}`);
+            } else {
+                bot.chat('👥 Aucun autre joueur');
+            }
+        }
+    },
+    '!status': {
+        desc: 'Statut du bot',
+        execute: () => {
+            const status = isConnected ? '✅ Connecté' : '❌ Déconnecté';
+            const uptime = Math.floor((Date.now() - lastActivity) / 1000);
+            bot.chat(`${status} | 🕐 Actif depuis ${uptime}s | 🔒 Whitelist: ${WHITELIST.length} joueurs`);
+        }
+    },
+    '!uptime': {
+        desc: 'Temps de fonctionnement',
+        execute: () => {
+            const uptime = Math.floor(process.uptime());
+            const hours = Math.floor(uptime / 3600);
+            const minutes = Math.floor((uptime % 3600) / 60);
+            const seconds = uptime % 60;
+            bot.chat(`⏱️ Uptime: ${hours}h ${minutes}m ${seconds}s`);
+        }
+    },
+    '!whitelist': {
+        desc: 'Voir la whitelist',
+        execute: () => bot.chat(`🔒 Whitelist: ${WHITELIST.join(', ')}`)
+    },
+    '!mods': {
+        desc: 'Voir les mods configurés',
+        execute: () => {
+            const modList = FORGE_MODS.map(mod => mod.modid).join(', ');
+            bot.chat(`🛠️ Mods Forge: ${modList}`);
+        }
+    }
+};
+
+// ======================
+// GESTION DES COMMANDES (CORRIGÉE)
+// ======================
+
+function handleCommand(message, username) {
+    // Vérifier si le message est une commande
+    if (!message.startsWith('!')) return;
+    
+    // Extraire la commande
+    const args = message.trim().split(' ');
+    const cmd = args[0].toLowerCase();
+    
+    // Vérifier la whitelist
+    if (!isWhitelisted(username)) {
+        console.log(`🚫 Commande bloquée de ${username}: ${message}`);
+        // Envoyer un message privé au joueur
+        if (bot && bot.players[username]) {
+            bot.whisper(username, '❌ Tu n\'es pas autorisé à utiliser les commandes.');
+        }
+        return;
+    }
+    
+    // Vérifier si la commande existe
+    if (!commands[cmd]) {
+        if (bot && bot.players[username]) {
+            bot.whisper(username, `❌ Commande inconnue: ${cmd}. Tape !help`);
+        }
+        return;
+    }
+    
+    console.log(`✅ Commande de ${username}: ${message}`);
+    
+    try {
+        commands[cmd].execute(args.slice(1));
+    } catch (err) {
+        console.log(`❌ Erreur commande ${cmd}:`, err.message);
+        bot.chat('⚠️ Erreur lors de l\'exécution');
+    }
+}
+
+// ======================
+// GESTION CONNEXION STABLE
+// ======================
+
+function createBot() {
+    console.log(`🚀 Connexion à ${config.host}:${config.port}...`);
     
     try {
         bot = mineflayer.createBot({
@@ -91,331 +280,223 @@ function connectWithModDetection() {
             username: config.username,
             version: config.version,
             auth: config.auth,
-            connectTimeout: 20000,
+            
+            // Configuration minimale pour stabilité
+            connectTimeout: 45000,
             keepAlive: true,
-            forgeOptions: { forgeMods: currentModsList }
+            checkTimeoutInterval: 60000,
+            hideErrors: false,
+            
+            // CONFIGURATION FORGE AVEC MODS
+            forgeOptions: {
+                forgeMods: FORGE_MODS
+            }
         });
         
-        setupModDetectionEvents();
+        setupBotEvents();
         
     } catch (err) {
         console.error('❌ Erreur création bot:', err.message);
-        handleConnectionFailure();
+        setTimeout(() => {
+            createBot();
+        }, 5000);
     }
 }
 
-function setupModDetectionEvents() {
-    // Événement pour détecter les mods du serveur
-    bot.on('modList', (mods) => {
-        console.log('🎯 MODS DÉTECTÉS PAR LE SERVEUR:');
-        detectedServerMods = mods.map(mod => ({
-            modid: mod.modid,
-            version: mod.version
-        }));
-        
-        console.log(`📊 ${detectedServerMods.length} mods détectés:`);
-        detectedServerMods.forEach((mod, i) => {
-            console.log(`   ${i+1}. ${mod.modid} v${mod.version}`);
-        });
-        
-        // Comparer avec nos mods actuels
-        const missingMods = detectedServerMods.filter(serverMod => 
-            !currentModsList.some(ourMod => ourMod.modid === serverMod.modid)
-        );
-        
-        if (missingMods.length > 0) {
-            console.log(`⚠️ ${missingMods.length} mods manquants dans notre configuration:`);
-            missingMods.forEach(mod => {
-                console.log(`   - ${mod.modid} (v${mod.version})`);
-                
-                // Vérifier si c'est un mod commun qu'on peut ajouter automatiquement
-                const commonMod = COMMON_MODS.find(m => m.modid === mod.modid);
-                if (commonMod) {
-                    console.log(`     → Ajout automatique: ${commonMod.modid} v${commonMod.version}`);
-                    currentModsList.push(commonMod);
-                } else {
-                    console.log(`     ❓ Mod inconnu, ajout avec version serveur`);
-                    currentModsList.push(mod);
-                }
-            });
-            
-            // Si on a ajouté des mods, on se reconnecte
-            if (connectionAttempt < MAX_ATTEMPTS) {
-                console.log('🔄 Mods ajoutés, reconnexion améliorée...');
-                setTimeout(() => connectWithModDetection(), 3000);
-                return;
-            }
-        }
-    });
-    
-    // Événement de kick avec raison
-    bot.on('kicked', (reason) => {
-        console.log('👢 Kick du serveur:', reason);
-        
-        // Analyser le message de kick pour détecter les mods manquants
-        analyzeKickReason(reason);
-        
-        if (connectionAttempt < MAX_ATTEMPTS) {
-            console.log(`🔄 Nouvelle tentative dans 5s... (${connectionAttempt}/${MAX_ATTEMPTS})`);
-            setTimeout(() => connectWithModDetection(), 5000);
-        } else {
-            console.log('❌ Maximum de tentatives atteint.');
-            startSafeMode();
-        }
-    });
-    
-    // Événement de connexion réussie
-    bot.on('login', () => {
+function setupBotEvents() {
+    // Événement de connexion
+    bot.once('login', () => {
         console.log('✅ Authentification réussie');
     });
     
-    bot.on('spawn', () => {
+    bot.once('spawn', () => {
         isConnected = true;
-        connectionAttempt = 0; // Réinitialiser le compteur
-        console.log('📍 CONNEXION RÉUSSIE !');
-        console.log('🎮 Bot connecté avec les mods suivants:');
-        currentModsList.forEach((mod, i) => {
-            console.log(`   ${i+1}. ${mod.modid} v${mod.version}`);
-        });
+        lastActivity = Date.now();
+        console.log('📍 Bot spawné avec succès');
         
-        setupBotFeatures();
-    });
-    
-    // Gestion des erreurs
-    bot.on('error', (err) => {
-        console.error('❌ Erreur:', err.message);
-        if (err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT') {
-            console.log('📡 Problème de connexion réseau');
-            handleConnectionFailure();
-        }
-    });
-    
-    bot.on('end', () => {
-        console.log('🔌 Déconnecté');
-        isConnected = false;
-        handleConnectionFailure();
-    });
-}
-
-function analyzeKickReason(reason) {
-    const reasonStr = reason.toString().toLowerCase();
-    
-    // Détecter les mods manquants dans le message de kick
-    if (reasonStr.includes('mod') || reasonStr.includes('forge')) {
-        console.log('🔍 Analyse du kick - recherche de noms de mods...');
+        // Afficher les infos Forge
+        console.log(`🛠️ Bot connecté avec ${FORGE_MODS.length} mods Forge`);
         
-        // Expressions régulières pour trouver les mods
-        const modPatterns = [
-            /mod '([^']+)' (?:is missing|requires)/i,
-            /missing mod(?:s)?:? ([^\n,.]+)/i,
-            /required mod(?:s)?:? ([^\n,.]+)/i,
-            /([a-z0-9_]+) v[0-9.]+/gi
-        ];
-        
-        for (const pattern of modPatterns) {
-            const matches = reasonStr.match(pattern);
-            if (matches) {
-                console.log('🎯 Mods détectés dans le message de kick:', matches);
-                
-                // Extraire les noms de mods
-                matches.forEach(match => {
-                    const modName = match.replace(/['"]/g, '').trim().toLowerCase();
-                    if (modName && !['mod', 'missing', 'requires', 'required'].includes(modName)) {
-                        console.log(`   → Mod suspecté: ${modName}`);
-                        
-                        // Chercher dans les mods communs
-                        const commonMod = COMMON_MODS.find(m => 
-                            m.modid.toLowerCase() === modName || 
-                            m.modid.toLowerCase().includes(modName)
-                        );
-                        
-                        if (commonMod && !currentModsList.some(m => m.modid === commonMod.modid)) {
-                            console.log(`     ✅ Ajout: ${commonMod.modid}`);
-                            currentModsList.push(commonMod);
-                        }
-                    }
-                });
+        // Démarrer l'anti-AFK après 10 secondes
+        setTimeout(() => {
+            if (isConnected) {
+                startAntiAFK();
+                console.log('🤖 Anti-AFK activé');
+                bot.chat('✅ Bot Forge 1.20.1 connecté ! Tape !help pour les commandes');
             }
-        }
-    }
-}
-
-function handleConnectionFailure() {
-    if (connectionAttempt < MAX_ATTEMPTS) {
-        console.log(`🔄 Nouvelle tentative dans 10s... (${connectionAttempt}/${MAX_ATTEMPTS})`);
-        setTimeout(() => connectWithModDetection(), 10000);
-    } else {
-        console.log('❌ Échec de connexion après plusieurs tentatives');
-        startSafeMode();
-    }
-}
-
-// ======================
-// MODE SÛR (sans mods)
-// ======================
-
-function startSafeMode() {
-    console.log('🛡️ Passage en mode sûr (sans mods Forge)...');
+        }, 10000);
+    });
     
-    currentModsList = [{ modid: 'minecraft', version: config.version }];
-    
-    setTimeout(() => {
-        bot = mineflayer.createBot({
-            host: config.host,
-            port: config.port,
-            username: config.username,
-            version: config.version,
-            auth: config.auth,
-            connectTimeout: 30000,
-            keepAlive: true,
-            // Pas d'options Forge pour le mode sûr
+    // Événement spécifique Forge
+    bot.on('forgeMods', (mods) => {
+        console.log('📦 Mods du serveur détectés:');
+        mods.forEach(mod => {
+            console.log(`   - ${mod.modid} v${mod.version}`);
         });
-        
-        bot.on('spawn', () => {
-            console.log('✅ Connecté en mode sûr');
-            bot.chat('⚠️ Connecté en mode sûr (sans mods)');
-            setupBotFeatures();
-        });
-        
-        bot.on('error', (err) => {
-            console.error('❌ Erreur mode sûr:', err.message);
-        });
-        
-    }, 5000);
-}
-
-// ======================
-// FONCTIONNALITÉS DU BOT
-// ======================
-
-function setupBotFeatures() {
-    if (!bot) return;
+    });
     
-    console.log('⚙️ Configuration des fonctionnalités du bot...');
-    
-    // Anti-AFK simple
-    const antiAFKInterval = setInterval(() => {
-        if (bot && isConnected) {
-            const actions = ['forward', 'left', 'right', 'back'];
-            const action = actions[Math.floor(Math.random() * actions.length)];
-            
-            bot.setControlState(action, true);
-            setTimeout(() => {
-                if (bot) bot.setControlState(action, false);
-            }, 1000);
-        }
-    }, 30000);
-    
-    // Gestion des commandes
+    // GESTION DES MESSAGES CORRIGÉE
     bot.on('chat', (username, message) => {
-        if (!isWhitelisted(username)) {
-            console.log(`🚫 Commande non autorisée de ${username}`);
-            return;
-        }
-        
+        console.log(`💬 ${username}: ${message}`);
         if (message.startsWith('!')) {
             handleCommand(message, username);
         }
     });
     
-    // Nettoyage à la déconnexion
-    bot.on('end', () => {
-        clearInterval(antiAFKInterval);
+    // Événements de déconnexion
+    bot.on('end', (reason) => {
+        console.log(`🔌 Déconnexion: ${reason || 'Raison inconnue'}`);
+        handleDisconnection();
+    });
+    
+    bot.on('kicked', (reason) => {
+        console.log(`👢 Kick: ${reason}`);
+        handleDisconnection();
+    });
+    
+    bot.on('error', (err) => {
+        console.error(`❌ Erreur: ${err.message}`);
+        if (err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT') {
+            handleDisconnection();
+        }
+    });
+    
+    // Événements utiles pour le debug
+    bot.on('playerJoined', (player) => {
+        console.log(`👋 ${player.username} a rejoint`);
+    });
+    
+    bot.on('playerLeft', (player) => {
+        console.log(`👋 ${player.username} a quitté`);
     });
 }
 
 // ======================
-// COMMANDES
+// GESTION RECONNEXION INTELLIGENTE
 // ======================
 
-function isWhitelisted(playerName) {
-    return WHITELIST.some(name => name.toLowerCase() === playerName.toLowerCase());
-}
+let reconnectAttempts = 0;
+let reconnectTimeout = null;
 
-function handleCommand(message, username) {
-    const args = message.trim().split(' ');
-    const command = args[0].toLowerCase();
+function handleDisconnection() {
+    isConnected = false;
     
-    console.log(`📝 Commande de ${username}: ${message}`);
-    
-    switch(command) {
-        case '!help':
-            bot.chat('📋 Commandes: !help, !mods, !status, !players, !ping, !pos');
-            break;
-            
-        case '!mods':
-            if (detectedServerMods.length > 0) {
-                bot.chat(`🎯 ${detectedServerMods.length} mods détectés: ${detectedServerMods.map(m => m.modid).slice(0, 5).join(', ')}${detectedServerMods.length > 5 ? '...' : ''}`);
-            } else if (currentModsList.length > 0) {
-                bot.chat(`⚙️ ${currentModsList.length} mods utilisés: ${currentModsList.map(m => m.modid).join(', ')}`);
-            } else {
-                bot.chat('🔧 Mode sûr - pas de mods configurés');
-            }
-            break;
-            
-        case '!status':
-            const status = isConnected ? '✅ Connecté' : '❌ Déconnecté';
-            bot.chat(`${status} | Mods: ${currentModsList.length} | Whitelist: ${WHITELIST.join(', ')}`);
-            break;
-            
-        case '!players':
-            const players = Object.keys(bot.players || {}).filter(p => p !== bot.username);
-            if (players.length > 0) {
-                bot.chat(`👥 ${players.length} joueurs: ${players.join(', ')}`);
-            } else {
-                bot.chat('👥 Aucun autre joueur');
-            }
-            break;
-            
-        case '!ping':
-            bot.chat('🏓 Pong!');
-            break;
-            
-        case '!pos':
-            if (bot.entity) {
-                const pos = bot.entity.position;
-                bot.chat(`📍 X: ${Math.floor(pos.x)} Y: ${Math.floor(pos.y)} Z: ${Math.floor(pos.z)}`);
-            }
-            break;
-            
-        case '!reconnect':
-            bot.chat('🔄 Reconnexion...');
-            bot.end();
-            setTimeout(() => connectWithModDetection(), 3000);
-            break;
-            
-        case '!debug':
-            bot.chat(`🔧 Debug: Host=${config.host}:${config.port}, Mods=${currentModsList.length}, ServerMods=${detectedServerMods.length}`);
-            break;
-            
-        default:
-            bot.chat(`❌ Commande inconnue. Tape !help`);
+    if (antiAFKInterval) {
+        clearInterval(antiAFKInterval);
+        antiAFKInterval = null;
     }
+    
+    if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+    }
+    
+    reconnectAttempts++;
+    
+    // Réduction progressive des tentatives
+    const maxAttempts = Math.min(20, 5 + reconnectAttempts);
+    
+    if (reconnectAttempts > maxAttempts) {
+        console.log('🔄 Trop de tentatives, attente de 5 minutes...');
+        reconnectAttempts = 0;
+        reconnectTimeout = setTimeout(() => {
+            createBot();
+        }, 300000);
+        return;
+    }
+    
+    // Délai exponentiel avec limite
+    const baseDelay = 5000;
+    const maxDelay = 120000;
+    const delay = Math.min(baseDelay * Math.pow(1.5, reconnectAttempts - 1), maxDelay);
+    
+    console.log(`🔄 Reconnexion dans ${Math.round(delay/1000)}s (tentative ${reconnectAttempts})`);
+    
+    reconnectTimeout = setTimeout(() => {
+        if (bot) {
+            try {
+                bot.end();
+                bot = null;
+            } catch (err) {
+                // Ignorer les erreurs de fermeture
+            }
+        }
+        createBot();
+    }, delay);
 }
 
 // ======================
-// DÉMARRAGE
+// SANTÉ DU BOT
 // ======================
 
-console.log('🤖 Minecraft Bot - Détection Auto Mods');
-console.log('=====================================');
-console.log(`Serveur: ${config.host}:${config.port}`);
-console.log(`Bot: ${config.username}`);
-console.log(`Version: ${config.version}`);
-console.log(`Whitelist: ${WHITELIST.join(', ')}`);
-console.log('=====================================');
+// Vérifier périodiquement la connexion
+setInterval(() => {
+    if (isConnected && bot) {
+        const inactiveTime = Date.now() - lastActivity;
+        if (inactiveTime > 300000) { // 5 minutes d'inactivité
+            console.log('⚠️ Aucune activité depuis 5 minutes, vérification...');
+            // Tester la connexion avec une action simple
+            try {
+                bot.setControlState('jump', true);
+                setTimeout(() => {
+                    if (bot) bot.setControlState('jump', false);
+                }, 100);
+                lastActivity = Date.now();
+            } catch (err) {
+                console.log('⚠️ Connexion perdue, reconnexion...');
+                handleDisconnection();
+            }
+        }
+    }
+}, 60000);
 
-// Gestion des arrêts
+// ======================
+// GESTION DES ARRÊTS
+// ======================
+
 process.on('SIGTERM', () => {
-    console.log('🛑 Arrêt Railway...');
-    if (bot) bot.quit();
-    server.close();
-    process.exit(0);
+    console.log('🛑 Arrêt demandé (SIGTERM)');
+    gracefulShutdown();
 });
 
 process.on('SIGINT', () => {
-    console.log('🛑 Arrêt manuel...');
-    if (bot) bot.quit();
-    server.close();
-    process.exit(0);
+    console.log('🛑 Arrêt demandé (SIGINT)');
+    gracefulShutdown();
 });
+
+function gracefulShutdown() {
+    if (antiAFKInterval) {
+        clearInterval(antiAFKInterval);
+    }
+    
+    if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+    }
+    
+    if (bot) {
+        try {
+            bot.quit('Arrêt propre');
+        } catch (err) {
+            // Ignorer
+        }
+    }
+    
+    setTimeout(() => {
+        console.log('👋 Bot arrêté');
+        server.close(() => {
+            process.exit(0);
+        });
+    }, 1000);
+}
+
+// ======================
+// INFOS DE DÉMARRAGE
+// ======================
+
+console.log('🤖 Démarrage du Bot Forge 1.20.1');
+console.log('==============================');
+console.log(`Health check: Port ${WEB_PORT}`);
+console.log(`Serveur Minecraft: ${config.host}:${config.port}`);
+console.log(`Bot: ${config.username}`);
+console.log(`Whitelist: ${WHITELIST.join(', ')}`);
+console.log(`Mods Forge: ${FORGE_MODS.length} mods configurés`);
+console.log('==============================');
