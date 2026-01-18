@@ -1,18 +1,20 @@
 FROM node:18-alpine
 
-# Installer les dépendances système
+# Installer les dépendances système (sans npm config)
 RUN apk add --no-cache \
     python3 \
     make \
     g++ \
     git \
     curl \
-    openjdk17-jre \
-    && npm config set python /usr/bin/python3
+    openjdk17-jre-headless
+
+# Définir python3 comme python par défaut (sans npm config)
+RUN ln -sf /usr/bin/python3 /usr/bin/python
 
 WORKDIR /app
 
-# Copier les fichiers package d'abord pour meilleur caching
+# Copier package.json d'abord
 COPY package*.json ./
 
 # Installer les dépendances
@@ -22,10 +24,7 @@ RUN npm ci --only=production
 COPY . .
 
 # Créer les dossiers nécessaires
-RUN mkdir -p /app/logs /app/config
-
-# Rendre les scripts exécutables
-RUN chmod +x start.sh
+RUN mkdir -p /app/logs
 
 # Variables d'environnement
 ENV NODE_ENV=production
@@ -34,4 +33,4 @@ ENV PORT=8080
 # Exposer le port pour health checks
 EXPOSE 8080
 
-CMD ["./start.sh"]
+CMD ["node", "bot.js"]
