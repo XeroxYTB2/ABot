@@ -47,7 +47,7 @@ const config = {
 // Configuration des mods Forge 1.20.1
 const FORGE_MODS = [
     { modid: 'minecraft', version: '1.20.1' },
-    { modid: 'forge', version: '47.3.0' },
+    { modid: 'forge', version: '47.4.10' },
     { modid: 'create', version: '1.20.1-6.0.8' }
 ];
 
