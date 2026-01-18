@@ -1,5 +1,8 @@
 const mineflayer = require('mineflayer');
 
+// Démarrer d'abord le serveur HTTP de healthcheck
+require('./healthcheck');
+
 // Configuration depuis les variables d'environnement
 const config = {
   host: process.env.SERVER_HOST || 'localhost',
@@ -10,6 +13,7 @@ const config = {
 };
 
 console.log('🔧 Configuration:', config);
+console.log('🌐 Healthcheck démarré sur port', process.env.PORT || 8080);
 
 // Fonction pour créer le bot
 function createBot() {
@@ -19,7 +23,7 @@ function createBot() {
     username: config.username,
     password: config.password,
     version: config.version,
-    auth: 'microsoft'
+    auth: config.password ? 'microsoft' : 'offline'
   });
 
   // Événements
@@ -96,8 +100,10 @@ function createBot() {
   return bot;
 }
 
-// Démarrer le bot
-createBot();
+// Démarrer le bot après 2 secondes (laisser le temps au healthcheck de démarrer)
+setTimeout(() => {
+  createBot();
+}, 2000);
 
 // Garder le processus actif
 process.on('SIGINT', () => {
