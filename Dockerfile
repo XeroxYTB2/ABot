@@ -8,8 +8,8 @@ WORKDIR /app
 # Copier les fichiers de dépendances
 COPY package*.json ./
 
-# Installer les dépendances Node.js
-RUN npm ci --only=production
+# CHANGEMENT ICI : Utiliser npm install au lieu de npm ci
+RUN npm install --production --legacy-peer-deps
 
 # Copier le code source
 COPY . .
