@@ -44,11 +44,10 @@ const config = {
     auth: process.env.MC_AUTH || 'offline'
 };
 
-// Configuration des mods Forge 1.20.1
+// CONFIGURATION CORRIGÉE DES MODS FORGE 1.20.1
+// Note: 'minecraft' et 'forge' ne sont PAS des mods à lister ici
 const FORGE_MODS = [
-    { modid: 'minecraft', version: '1.20.1' },
     { modid: 'mixinextras', version: '0.4.1' },
-    { modid: 'forge', version: '47.4.10' },
     { modid: 'flywheel', version: '1.0.5' },
     { modid: 'ponder', version: '1.0.91' },
     { modid: 'create', version: '6.0.8' }
@@ -221,7 +220,7 @@ const commands = {
         desc: 'Voir les mods configurés',
         execute: () => {
             const modList = FORGE_MODS.map(mod => mod.modid).join(', ');
-            bot.chat(`🛠️ Mods Forge: ${modList}`);
+            bot.chat(`🛠️ Mods Forge: ${modList} (version 1.20.1-47.4.10)`);
         }
     }
 };
@@ -287,7 +286,7 @@ function createBot() {
             checkTimeoutInterval: 60000,
             hideErrors: false,
             
-            // CONFIGURATION FORGE AVEC MODS
+            // CONFIGURATION FORGE CORRIGÉE
             forgeOptions: {
                 forgeMods: FORGE_MODS
             }
@@ -316,6 +315,7 @@ function setupBotEvents() {
         
         // Afficher les infos Forge
         console.log(`🛠️ Bot connecté avec ${FORGE_MODS.length} mods Forge`);
+        console.log(`🛠️ Version Forge: 1.20.1-47.4.10`);
         
         // Démarrer l'anti-AFK après 10 secondes
         setTimeout(() => {
@@ -327,12 +327,24 @@ function setupBotEvents() {
         }, 10000);
     });
     
-    // Événement spécifique Forge
+    // Événements de debug Forge
+    bot.on('forgeHandshake', () => {
+        console.log('🤝 Poignée de main Forge initiée');
+    });
+    
+    bot.on('forgeHandshakeComplete', () => {
+        console.log('✅ Poignée de main Forge terminée');
+    });
+    
     bot.on('forgeMods', (mods) => {
-        console.log('📦 Mods du serveur détectés:');
-        mods.forEach(mod => {
-            console.log(`   - ${mod.modid} v${mod.version}`);
-        });
+        console.log('📦 Mods Forge du serveur détectés:');
+        if (mods && mods.length > 0) {
+            mods.forEach(mod => {
+                console.log(`   - ${mod.modid} v${mod.version}`);
+            });
+        } else {
+            console.log('   Aucun mod détecté (le serveur n\'a peut-être pas envoyé la liste)');
+        }
     });
     
     // GESTION DES MESSAGES CORRIGÉE
@@ -498,5 +510,8 @@ console.log(`Health check: Port ${WEB_PORT}`);
 console.log(`Serveur Minecraft: ${config.host}:${config.port}`);
 console.log(`Bot: ${config.username}`);
 console.log(`Whitelist: ${WHITELIST.join(', ')}`);
-console.log(`Mods Forge: ${FORGE_MODS.length} mods configurés`);
+console.log(`Mods Forge configurés: ${FORGE_MODS.length} mods`);
+FORGE_MODS.forEach(mod => {
+    console.log(`   - ${mod.modid} v${mod.version}`);
+});
 console.log('==============================');
