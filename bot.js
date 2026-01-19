@@ -1,29 +1,58 @@
 const mineflayer = require('mineflayer');
 require('dotenv').config();
 
-// Configuration depuis les variables d'environnement (Railway)
+// Configuration
 const config = {
   host: process.env.MC_HOST || 'localhost',
   port: parseInt(process.env.MC_PORT) || 25565,
   username: process.env.MC_USERNAME || 'AFK_Bot',
   password: process.env.MC_PASSWORD || '',
   version: process.env.MC_VERSION || '1.20.1',
-  auth: process.env.MC_AUTH || 'microsoft' // ou 'mojang' ou 'offline'
+  auth: process.env.MC_AUTH || 'offline'
 };
 
-class PersistentAFKBot {
+class UltraPersistentAFKBot {
   constructor() {
     this.bot = null;
     this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 1000; // Très grand nombre pour persistance
-    this.reconnectDelay = 5000; // 5 secondes
+    this.maxReconnectAttempts = Infinity;
+    this.baseReconnectDelay = 15000; // 15 secondes de base
+    this.isReconnecting = false;
+    this.lastConnectionTime = 0;
+    this.reconnectTimer = null;
     
-    this.createBot();
-    this.setupEventHandlers();
+    console.log(`[${new Date().toISOString()}] 🚀 Initialisation du bot AFK ultra-persistant...`);
+    this.initializeBot();
   }
 
-  createBot() {
-    console.log(`[${new Date().toISOString()}] Tentative de connexion...`);
+  async initializeBot() {
+    try {
+      // Attendre un peu avant la première connexion
+      if (this.reconnectAttempts > 0) {
+        const delay = this.calculateReconnectDelay();
+        console.log(`[${new Date().toISOString()}] ⏳ Attente de ${delay/1000}s avant reconnexion...`);
+        await this.sleep(delay);
+      }
+      
+      this.createBotInstance();
+      this.setupEventHandlers();
+      this.lastConnectionTime = Date.now();
+      
+    } catch (error) {
+      console.error(`[${new Date().toISOString()}] ❌ Erreur d'initialisation:`, error.message);
+      this.scheduleReconnect();
+    }
+  }
+
+  calculateReconnectDelay() {
+    // Délai exponentiel avec un maximum de 2 minutes
+    const exponentialDelay = this.baseReconnectDelay * Math.pow(1.5, this.reconnectAttempts);
+    const jitter = Math.random() * 5000; // Jitter aléatoire
+    return Math.min(exponentialDelay, 120000) + jitter; // Max 2 minutes
+  }
+
+  createBotInstance() {
+    console.log(`[${new Date().toISOString()}] 🔗 Connexion à ${config.host}:${config.port}...`);
     
     this.bot = mineflayer.createBot({
       host: config.host,
@@ -33,8 +62,13 @@ class PersistentAFKBot {
       version: config.version,
       auth: config.auth,
       hideErrors: false,
-      checkTimeoutInterval: 30000, // Vérifie la connexion toutes les 30s
-      logErrors: true
+      checkTimeoutInterval: 60000, // Augmenté à 60 secondes
+      connectTimeout: 30000, // Timeout de connexion de 30 secondes
+      logErrors: true,
+      viewDistance: 'tiny',
+      chatLengthLimit: 256,
+      colorsEnabled: false,
+      defaultChatPatterns: false
     });
   }
 
@@ -42,148 +76,203 @@ class PersistentAFKBot {
     if (!this.bot) return;
 
     // Connexion réussie
-    this.bot.on('login', () => {
+    this.bot.once('login', () => {
       console.log(`[${new Date().toISOString()}] ✅ Connecté en tant que ${this.bot.username}`);
       this.reconnectAttempts = 0;
-      this.startAFKActions();
+      this.isReconnecting = false;
+      this.startUltraPersistentAFK();
     });
 
-    // Gestion des erreurs
-    this.bot.on('error', (err) => {
-      console.error(`[${new Date().toISOString()}] ❌ Erreur:`, err.message);
+    // Échec de connexion initiale
+    this.bot.once('error', (err) => {
+      if (!this.bot._client.ended) {
+        console.error(`[${new Date().toISOString()}] ❌ Erreur de connexion:`, err.message);
+        this.scheduleReconnect();
+      }
     });
 
-    // Déconnexion
-    this.bot.on('end', (reason) => {
-      console.log(`[${new Date().toISOString()}] 🔌 Déconnecté:`, reason);
-      this.handleReconnect();
+    // Déconnexion du serveur
+    this.bot.once('end', (reason) => {
+      console.log(`[${new Date().toISOString()}] 🔌 Déconnecté: ${reason}`);
+      this.handleDisconnection();
     });
 
     // Kicked du serveur
     this.bot.on('kicked', (reason) => {
-      console.log(`[${new Date().toISOString()}] 🚫 Kicked:`, reason);
-      this.handleReconnect();
+      console.log(`[${new Date().toISOString()}] 🚫 Expulsé:`, reason);
+      this.handleDisconnection();
     });
 
-    // Chat
-    this.bot.on('message', (message) => {
-      const text = message.toString();
-      console.log(`[${new Date().toISOString()}] 💬 Chat:`, text);
-    });
-
-    // Santé
-    this.bot.on('health', () => {
-      if (this.bot.food < 10) {
-        console.log(`[${new Date().toISOString()}] 🍖 Nourriture faible: ${this.bot.food}`);
-      }
+    // Timeout
+    this.bot.on('timeout', () => {
+      console.log(`[${new Date().toISOString()}] ⏰ Timeout de connexion`);
+      this.handleDisconnection();
     });
   }
 
-  startAFKActions() {
-    if (!this.bot) return;
+  handleDisconnection() {
+    if (this.isReconnecting) return;
+    
+    this.isReconnecting = true;
+    this.reconnectAttempts++;
+    
+    // Nettoyer l'ancienne instance
+    if (this.bot) {
+      try {
+        this.bot.end();
+        this.bot.removeAllListeners();
+      } catch (e) {}
+      this.bot = null;
+    }
+    
+    // Attendre que la session soit complètement fermée
+    const timeSinceConnection = Date.now() - this.lastConnectionTime;
+    const minWaitTime = timeSinceConnection < 10000 ? 10000 : 5000; // Attendre au moins 10s si connexion récente
+    
+    setTimeout(() => {
+      this.initializeBot();
+    }, minWaitTime);
+  }
 
-    console.log(`[${new Date().toISOString()}] 🚀 Démarrage des actions AFK...`);
+  scheduleReconnect() {
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    
+    this.reconnectAttempts++;
+    const delay = this.calculateReconnectDelay();
+    
+    console.log(`[${new Date().toISOString()}] 🔄 Reconnexion dans ${delay/1000}s (tentative ${this.reconnectAttempts})`);
+    
+    this.reconnectTimer = setTimeout(() => {
+      this.initializeBot();
+    }, delay);
+  }
 
-    // 1. Rotation automatique (toutes les 30 secondes)
-    setInterval(() => {
+  startUltraPersistentAFK() {
+    console.log(`[${new Date().toISOString()}] 🎮 Démarrage du mode AFK ultra-persistant...`);
+    
+    // 1. Rotation anti-afk (toutes les 20-40 secondes)
+    const rotationInterval = setInterval(() => {
       if (this.bot && this.bot.entity) {
         const yaw = Math.random() * Math.PI * 2;
-        const pitch = (Math.random() * Math.PI) - Math.PI / 2;
+        const pitch = (Math.random() * 0.5) - 0.25; // Petit mouvement vertical
         this.bot.look(yaw, pitch, false);
       }
-    }, 30000);
+    }, 20000 + Math.random() * 20000);
 
-    // 2. Saut aléatoire (toutes les 45-75 secondes)
-    setInterval(() => {
+    // 2. Saut léger (toutes les 30-60 secondes)
+    const jumpInterval = setInterval(() => {
       if (this.bot && this.bot.entity) {
         this.bot.setControlState('jump', true);
         setTimeout(() => {
           if (this.bot) this.bot.setControlState('jump', false);
-        }, 500);
+        }, 200);
       }
-    }, 45000 + Math.random() * 30000);
+    }, 30000 + Math.random() * 30000);
 
-    // 3. Mouvement aléatoire (toutes les 60-120 secondes)
-    setInterval(() => {
+    // 3. Déplacement occasionnel (toutes les 2-5 minutes)
+    const movementInterval = setInterval(() => {
       if (this.bot && this.bot.entity) {
         const directions = ['forward', 'back', 'left', 'right'];
-        const direction = directions[Math.floor(Math.random() * directions.length)];
+        const direction = directions[Math.floor(Math.random() * 2)]; // Seulement avant/arrière
         
         this.bot.setControlState(direction, true);
         setTimeout(() => {
           if (this.bot) this.bot.setControlState(direction, false);
-        }, 2000 + Math.random() * 3000);
+        }, 1000);
       }
-    }, 60000 + Math.random() * 60000);
+    }, 120000 + Math.random() * 180000);
 
-    // 4. Changement d'item dans la main (toutes les 90 secondes)
-    setInterval(() => {
-      if (this.bot && this.bot.inventory) {
-        const items = this.bot.inventory.items();
-        if (items.length > 0) {
-          const randomItem = items[Math.floor(Math.random() * items.length)];
-          this.bot.equip(randomItem, 'hand');
-        }
+    // 4. Ping périodique pour maintenir la connexion
+    const pingInterval = setInterval(() => {
+      if (this.bot && this.bot._client) {
+        try {
+          // Envoyer un packet keep-alive
+          this.bot._client.write('keep_alive', {
+            keepAliveId: BigInt(Math.floor(Math.random() * 1000000))
+          });
+        } catch (e) {}
       }
-    }, 90000);
+    }, 15000);
 
-    // 5. Interaction avec l'environnement (toutes les 2-3 minutes)
-    setInterval(() => {
-      if (this.bot && this.bot.entity) {
-        // Clic droit dans l'air
-        this.bot.activateItem();
+    // Stocker les intervals pour nettoyage
+    this.afkIntervals = [rotationInterval, jumpInterval, movementInterval, pingInterval];
+
+    // Gérer le chat
+    this.bot.on('message', (message) => {
+      const text = message.toString().toLowerCase();
+      if (text.includes(config.username.toLowerCase())) {
+        console.log(`[${new Date().toISOString()}] 💬 Message détecté:`, message.toString());
       }
-    }, 120000 + Math.random() * 60000);
+    });
 
-    console.log(`[${new Date().toISOString()}] ⏰ Actions AFK programmées`);
+    // Surveillance de la santé
+    this.bot.on('health', () => {
+      if (this.bot.food < 15) {
+        console.log(`[${new Date().toISOString()}] ⚠️ Nourriture faible: ${this.bot.food}`);
+      }
+    });
   }
 
-  handleReconnect() {
-    this.reconnectAttempts++;
-    
-    if (this.reconnectAttempts > this.maxReconnectAttempts) {
-      console.log(`[${new Date().toISOString()}] ⚠️ Nombre maximum de tentatives atteint, redémarrage...`);
-      this.reconnectAttempts = 0;
+  cleanup() {
+    // Nettoyer tous les intervals
+    if (this.afkIntervals) {
+      this.afkIntervals.forEach(interval => clearInterval(interval));
     }
+    
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+    }
+    
+    if (this.bot) {
+      try {
+        this.bot.end();
+        this.bot.removeAllListeners();
+      } catch (e) {}
+      this.bot = null;
+    }
+  }
 
-    const delay = this.reconnectDelay * Math.min(this.reconnectAttempts, 10);
-    
-    console.log(`[${new Date().toISOString()}] 🔄 Reconnexion dans ${delay/1000}s (tentative ${this.reconnectAttempts})`);
-    
-    setTimeout(() => {
-      this.createBot();
-      this.setupEventHandlers();
-    }, delay);
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }
 
-// Gestion des arrêts propres
+// Gestion robuste des arrêts
 process.on('SIGINT', () => {
-  console.log(`[${new Date().toISOString()}] ⏹️ Arrêt en cours...`);
+  console.log(`\n[${new Date().toISOString()}] ⏹️ Arrêt propre du bot...`);
+  if (global.botInstance) {
+    global.botInstance.cleanup();
+  }
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  console.log(`[${new Date().toISOString()}] ⏹️ Arrêt en cours...`);
+  console.log(`\n[${new Date().toISOString()}] ⏹️ Arrêt propre du bot...`);
+  if (global.botInstance) {
+    global.botInstance.cleanup();
+  }
   process.exit(0);
 });
 
-// Redémarrage automatique en cas de crash
+// Redémarrage automatique en cas d'erreur
 process.on('uncaughtException', (err) => {
   console.error(`[${new Date().toISOString()}] 💥 Exception non gérée:`, err);
+  console.log(`[${new Date().toISOString()}] 🔄 Redémarrage dans 30 secondes...`);
+  
+  if (global.botInstance) {
+    global.botInstance.cleanup();
+  }
+  
   setTimeout(() => {
-    console.log(`[${new Date().toISOString()}] 🔄 Redémarrage après crash...`);
-    new PersistentAFKBot();
-  }, 10000);
+    console.log(`[${new Date().toISOString()}] 🚀 Redémarrage du bot...`);
+    global.botInstance = new UltraPersistentAFKBot();
+  }, 30000);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error(`[${new Date().toISOString()}] ⚠️ Rejet non géré:`, reason);
+  console.error(`[${new Date().toISOString()}] ⚠️ Rejet de promesse non géré:`, reason);
 });
 
 // Démarrer le bot
-console.log(`[${new Date().toISOString()}] 🎮 Démarrage du bot AFK persistant...`);
-console.log(`[${new Date().toISOString()}] 📍 Serveur: ${config.host}:${config.port}`);
-console.log(`[${new Date().toISOString()}] 👤 Utilisateur: ${config.username}`);
-
-new PersistentAFKBot();
+console.log(`[${new Date().toISOString()}] 🎮 Configuration: ${config.host}:${config.port}, Utilisateur: ${config.username}`);
+global.botInstance = new UltraPersistentAFKBot();
