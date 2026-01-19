@@ -1,7 +1,7 @@
 {
-  "name": "minecraft-afk-bot",
-  "version": "1.0.0",
-  "description": "Bot AFK ultra-persistant pour Minecraft",
+  "name": "minecraft-afk-bot-ultra",
+  "version": "2.0.0",
+  "description": "Bot AFK ultra-persistant avec reconnexion intelligente",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js"
@@ -9,7 +9,8 @@
   "dependencies": {
     "mineflayer": "^4.15.0",
     "dotenv": "^16.3.1",
-    "minecraft-data": "^3.0.0"
+    "minecraft-data": "^3.0.0",
+    "prismarine-auth": "^2.1.0"
   },
   "engines": {
     "node": ">=18.0.0"
